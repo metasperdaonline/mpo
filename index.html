@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+<title>Tauste — Dashboard de Metas de Perda</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --brand:#002855;--brand2:#003f80;--accent:#f2c811;--bg:#f0f4f8;
+  --card:#fff;--border:#e2e8f0;
+  --t1:#0f172a;--t2:#475569;--t3:#94a3b8;
+  --red:#ef4444;--green:#10b981;--blue:#3b82f6;
+}
+*{box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--t1);margin:0}
+
+.sidebar{width:56px;height:100vh;position:fixed;top:0;left:0;background:var(--brand);z-index:999;
+  display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.15);
+  transition:width .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.sidebar:hover,.sidebar.pinned{width:252px}
+.sidebar-logo{padding:20px 14px 16px;border-bottom:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;gap:12px;min-height:68px;white-space:nowrap;overflow:hidden}
+.logo-ic{font-size:20px;flex-shrink:0;width:28px;text-align:center}
+.logo-txt{opacity:0;transition:opacity .2s;white-space:nowrap}
+.sidebar:hover .logo-txt,.sidebar.pinned .logo-txt{opacity:1}
+.logo-main{font-size:18px;font-weight:800;color:var(--accent);display:block;letter-spacing:-.5px}
+.logo-sub{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:.2em;text-transform:uppercase}
+.nav{padding:10px 8px;flex:1}
+.nav-btn{width:100%;display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:10px;
+  margin-bottom:4px;cursor:pointer;border:none;background:transparent;
+  color:rgba(255,255,255,.55);font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;
+  font-weight:600;transition:all .18s;text-align:left;white-space:nowrap;position:relative}
+.nav-btn:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.9)}
+.nav-btn.active{background:var(--accent);color:var(--brand);font-weight:800}
+.nav-ic{font-size:17px;width:24px;text-align:center;flex-shrink:0}
+.nav-lbl{opacity:0;transition:opacity .2s}
+.sidebar:hover .nav-lbl,.sidebar.pinned .nav-lbl{opacity:1}
+.nav-btn::after{content:attr(data-tip);position:absolute;left:66px;top:50%;transform:translateY(-50%);
+  background:#1e293b;color:white;font-size:12px;font-weight:600;padding:5px 10px;border-radius:7px;
+  white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;
+  box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:9999}
+.sidebar:not(:hover):not(.pinned) .nav-btn:hover::after{opacity:1}
+.sidebar-foot{padding:12px 10px;border-top:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden}
+.foot-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;flex-shrink:0}
+.foot-txt{font-size:10px;color:rgba(255,255,255,.35);opacity:0;transition:opacity .2s}
+.sidebar:hover .foot-txt,.sidebar.pinned .foot-txt{opacity:1}
+.pin-btn{position:absolute;top:20px;right:-11px;width:22px;height:22px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--brand);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:10px;
+  color:var(--brand);font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:1000;transition:transform .25s}
+.sidebar.pinned .pin-btn{transform:rotate(180deg)}
+
+.main{margin-left:56px;min-height:100vh}
+.topbar{background:white;border-bottom:1px solid var(--border);height:56px;
+  display:flex;align-items:center;justify-content:space-between;padding:0 24px;
+  position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.topbar-title{font-size:16px;font-weight:800}
+.topbar-meta{font-size:12px;color:var(--t3)}
+.content{padding:22px 24px 100px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.p{padding:18px}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi{background:white;border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
+#filial-kpis .kpi{padding:12px 14px}
+#filial-kpis .kpi-val{font-size:17px}
+#filial-kpis .kpi-lbl{font-size:9px}
+.kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:12px 0 0 12px}
+.kpi.r::before{background:var(--red)}.kpi.g::before{background:var(--green)}
+.kpi.b::before{background:var(--blue)}.kpi.y::before{background:var(--accent)}
+.kpi.dk{background:var(--brand);border-color:var(--brand)}.kpi.dk::before{background:var(--accent)}
+.kpi-lbl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px}
+.kpi-val{font-size:21px;font-weight:800;line-height:1;font-family:'JetBrains Mono',monospace}
+.kpi.r .kpi-val{color:var(--red)}.kpi.g .kpi-val{color:var(--green)}
+.kpi.b .kpi-val{color:var(--blue)}.kpi.y .kpi-val{color:var(--accent)}
+.kpi.dk .kpi-lbl{color:rgba(255,255,255,.5)}.kpi.dk .kpi-val{color:var(--accent)}
+.kpi-sub{font-size:10px;color:var(--t3);margin-top:4px}
+.kpi.dk .kpi-sub{color:rgba(255,255,255,.35)}
+
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);
+   padding:10px 13px;text-align:left;background:#f8fafc;border-bottom:1px solid var(--border);
+   cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{background:#eef2f7;color:var(--brand)}
+td{padding:9px 13px;border-bottom:1px solid #f1f5f9;font-size:12px;color:var(--t2)}
+tr:hover td{background:#f8fafc}
+tr:last-child td{border-bottom:none}
+tfoot td{background:#f8fafc;border-top:2px solid var(--border);font-weight:800;font-size:12px;padding:10px 13px}
+
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-red{background:#fef2f2;color:var(--red);border:1px solid #fecaca}
+.badge-yellow{background:#fffbeb;color:#d97706;border:1px solid #fde68a}
+.badge-green{background:#ecfdf5;color:var(--green);border:1px solid #a7f3d0}
+
+.btn-export{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;border:1px solid var(--border);background:white;color:var(--t2)}
+.btn-export:hover{background:#f8fafc;border-color:var(--brand);color:var(--brand)}
+.btn-export.pdf:hover{background:#fef2f2;border-color:var(--red);color:var(--red)}
+.btn-export.excel:hover{background:#ecfdf5;border-color:var(--green);color:var(--green)}
+
+.upload-box{background:#f8fafc;border:2px dashed var(--border);border-radius:12px;
+  padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-box:hover{border-color:var(--brand2);background:#f0f4f8}
+.upload-box.loaded{border-color:var(--green);background:#ecfdf5;border-style:solid}
+
+.progress-container{display:flex;align-items:center;gap:10px;margin-top:10px}
+.progress-bar{flex:1;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:var(--blue);border-radius:3px;transition:width .2s ease;width:0%}
+.progress-text{font-size:12px;font-weight:700;color:var(--t2);min-width:45px;text-align:right;font-family:'JetBrains Mono',monospace}
+
+select,input[type=text]{padding:7px 12px;border-radius:8px;border:1px solid var(--border);
+  font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:600;color:var(--t1);
+  outline:none;background:white}
+select:focus{border-color:var(--brand2)}
+
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+.filial-grid{display:grid;grid-template-columns:1fr 320px;gap:16px;margin-bottom:18px}
+@media(max-width:1000px){.filial-grid{grid-template-columns:1fr}}
+.top-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.top-item:last-child{border-bottom:none}
+.top-rank{width:20px;height:20px;border-radius:50%;background:var(--brand);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
+.top-rank.r1{background:var(--red)}
+.top-rank.r2{background:#f97316}
+.top-rank.r3{background:#fbbf24}
+.diff-tag{font-size:9px;font-weight:700;padding:1px 4px;border-radius:4px}
+.diff-up{background:#fef2f2;color:var(--red)}
+.diff-down{background:#ecfdf5;color:var(--green)}
+.chart-box{background:white;border:1px solid var(--border);border-radius:14px;padding:18px}
+.chart-title{font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.sec-title{font-size:13px;font-weight:700;color:var(--t1);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sec-title::before{content:'';display:block;width:3px;height:14px;background:var(--accent);border-radius:2px}
+.prog{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin-top:5px}
+.prog-fill{height:100%;border-radius:3px;transition:width .4s}
+.hidden{display:none!important}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .22s ease}
+@media(max-width:1000px){.kpi-grid{grid-template-columns:1fr 1fr}.chart-grid{grid-template-columns:1fr}}
+/* ── MOBILE ── */
+@media(max-width:768px){
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .chart-grid{grid-template-columns:1fr}
+  .sc-active-slot{width:160px}
+}
+@media(max-width:600px){
+  /* Sidebar vira bottom nav */
+  .sidebar{
+    width:100%!important;height:56px;top:auto;bottom:0;left:0;right:0;
+    flex-direction:row;overflow:hidden;
+    box-shadow:0 -2px 12px rgba(0,0,0,.15);
+  }
+  .sidebar-logo{display:none}
+  .nav{
+    display:flex;flex-direction:row;padding:0;
+    justify-content:space-around;align-items:center;
+    flex:1;height:56px;
+  }
+  .nav-btn{
+    flex-direction:column;gap:2px;padding:6px 4px;
+    border-radius:8px;margin-bottom:0;width:auto;
+    font-size:9px;letter-spacing:0;
+    border-left:none!important;
+    border-top:2px solid transparent;
+  }
+  .nav-btn.active{background:transparent;color:var(--accent);border-top-color:var(--accent)}
+  .nav-btn.active .nav-ic{color:var(--accent)}
+  .nav-ic{font-size:20px;width:auto}
+  .nav-lbl{opacity:1!important;font-size:9px;white-space:nowrap}
+  .nav-btn::after{display:none} /* sem tooltip no mobile */
+  .sidebar-foot{display:none}
+  .pin-btn{display:none}
+  /* Conteúdo principal não fica embaixo da sidebar */
+  .main{margin-left:0;padding-bottom:56px}
+  .topbar{padding:0 14px}
+  .content{padding:14px 12px 72px}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  /* Cards de setor empilham */
+  .setor-cards-wrap{flex-direction:column}
+  .sc-active-slot{width:100%}
+  .sc-others-grid{width:100%}
+  /* Tabelas com scroll horizontal */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* Charts menores */
+  .chart-box{padding:12px}
+}
+
+
+/* ── MOBILE APRIMORADO (iPhone e telas até 480px) ── */
+@media(max-width:480px){
+  /* Topbar compacta */
+  .topbar-title{font-size:13px}
+  #topbar-meta{display:none}
+  #topbar-data{font-size:10px}
+
+  /* KPI grids — 2 colunas sempre */
+  .kpi-grid{grid-template-columns:1fr 1fr!important;gap:8px}
+  .kpi{padding:10px 10px 10px 14px}
+  .kpi-val{font-size:16px}
+  .kpi-lbl{font-size:9px}
+  .kpi-sub{font-size:9px}
+  #filial-kpis{grid-template-columns:1fr 1fr!important}
+  #filial-kpis .kpi-val{font-size:14px}
+  #filial-proj-kpis{grid-template-columns:1fr 1fr!important}
+
+  /* Gráficos — altura menor */
+  .chart-grid{grid-template-columns:1fr;gap:10px}
+  canvas{max-height:200px}
+
+  /* Cards de filial/setor menores */
+  .sel-cards{grid-template-columns:1fr 1fr;gap:8px}
+  .sel-card{padding:10px 12px}
+  .sel-card-name{font-size:11px}
+  .sel-card-pct{font-size:15px}
+  .setor-cards-wrap{flex-direction:column}
+  .sc-active-slot{width:100%}
+  .sc-others-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:6px}
+  .setor-card{padding:7px 10px}
+  .sc-name{font-size:10px}
+  .sc-pct-small{font-size:10px}
+
+  /* Tabelas — scroll horizontal */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:480px}
+  th,td{padding:7px 8px;font-size:11px}
+
+  /* filial-grid empilha */
+  .filial-grid{grid-template-columns:1fr!important}
+
+  /* Projeção — bloco compacto */
+  #filial-proj-bloco .card{padding:12px}
+
+  /* Hist grid */
+  #tab-historico .chart-grid,
+  div[style*="grid-template-columns:1fr 1fr"]{
+    display:block!important
+  }
+  #tab-historico canvas{margin-bottom:16px}
+
+  /* Popup setor — largura total */
+  .setor-popup{
+    width:100vw!important;max-height:100vh!important;
+    border-radius:16px 16px 0 0!important;
+    top:auto!important;bottom:0!important;
+    transform:translateX(-50%)!important;
+  }
+  .sp-header{border-radius:16px 16px 0 0!important}
+  .sp-btn-setores,.sp-btn-pdf{font-size:10px;padding:4px 8px}
+
+  /* Seletor popup — largura total */
+  .seletor-popup{
+    width:100vw!important;max-height:90vh!important;
+    border-radius:16px 16px 0 0!important;
+    top:auto!important;bottom:0!important;
+    transform:translateX(-50%)!important;
+  }
+  .sel-pop-grid{grid-template-columns:1fr 1fr!important}
+
+  /* Popup filial — largura total */
+  .filial-popup{
+    width:95vw!important;
+  }
+  .fp-kpis{grid-template-columns:repeat(3,1fr)!important}
+
+  /* Barra de progresso mês */
+  .content .card:first-child{padding:12px}
+
+  /* Ranking filiais */
+  #ranking-filiais > div{flex-wrap:wrap}
+}
+
+/* Cards de filial — grid normal sempre expandido */
+.sel-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.sel-card{background:white;border:2px solid var(--border);border-radius:14px;padding:16px;
+  cursor:pointer;transition:all .22s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden}
+.sel-card:hover{border-color:var(--brand2);box-shadow:0 4px 16px rgba(0,40,85,.1);transform:translateY(-1px)}
+.sel-card.active{border-color:var(--brand);background:#f0f4fa;box-shadow:0 4px 16px rgba(0,40,85,.15)}
+.sel-card.active::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--brand)}
+.sel-card.status-red{border-left:4px solid var(--red)}
+.sel-card.status-yellow{border-left:4px solid #d97706}
+.sel-card.status-green{border-left:4px solid var(--green)}
+.sel-card.active.status-red{border-color:var(--red);background:#fff5f5}
+.sel-card.active.status-yellow{border-color:#d97706;background:#fffdf0}
+.sel-card.active.status-green{border-color:var(--green);background:#f0fdf8}
+.sel-card-name{font-size:13px;font-weight:800;color:var(--t1);margin-bottom:10px;line-height:1.2}
+.sel-card-row{display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-bottom:3px}
+.sel-card-row span:last-child{font-weight:700;color:var(--t2);font-family:'JetBrains Mono',monospace}
+.sel-card-pct{font-size:18px;font-weight:800;font-family:'JetBrains Mono',monospace;margin:6px 0 4px}
+.calc-tag{display:inline-block;font-size:9px;font-weight:700;background:#eff6ff;color:var(--blue);
+  border:1px solid #bfdbfe;padding:1px 6px;border-radius:4px;letter-spacing:.05em;margin-left:6px;vertical-align:middle}
+
+/* Cards de SETOR — grid com card ativo na esquerda span-2 */
+/* Wrapper externo */
+.setor-cards-wrap{
+  display:flex;
+  gap:10px;
+  margin-bottom:20px;
+  align-items:stretch; /* ambos os filhos mesma altura */
+}
+.setor-cards-wrap.none-active{ display:block; }
+.setor-cards-wrap.none-active .sc-others-grid{ display:flex;flex-wrap:wrap;gap:8px; }
+
+/* Slot do card ativo — largura fixa, altura auto */
+.sc-active-slot{
+  flex-shrink:0;
+  width:200px;
+  display:flex;
+  flex-direction:column;
+}
+.sc-active-slot .setor-card.active{
+  flex:0 1 auto;
+  max-height:none;
+  overflow-y:visible;
+}
+/* Grid dos cards recolhidos */
+.sc-others-grid{
+  flex:1;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-content:flex-start;
+}
+
+/* Card base */
+.setor-card{
+  background:white;border:2px solid var(--border);border-radius:12px;
+  padding:9px 13px;cursor:pointer;
+  transition:all .22s cubic-bezier(.4,0,.2,1);
+  position:relative;overflow:visible;
+}
+.setor-card.active{
+  padding:8px 10px; /* padding reduzido no card ativo */
+}
+.setor-card:hover{border-color:var(--brand2);box-shadow:0 2px 10px rgba(0,40,85,.1)}
+.setor-card.status-red  {border-left:4px solid var(--red)}
+.setor-card.status-yellow{border-left:4px solid #d97706}
+.setor-card.status-green{border-left:4px solid var(--green)}
+
+/* Nome + pct compacto */
+.sc-collapsed{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.sc-name{font-size:11px;font-weight:700;color:var(--t2);white-space:normal;
+  overflow:visible;text-overflow:clip;max-width:none}
+.sc-pct-small{font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+
+/* Tooltip flutuante */
+.sc-tooltip{
+  position:absolute;top:calc(100% + 8px);left:0;
+  background:#1e293b;color:white;border-radius:10px;
+  padding:12px 14px;width:230px;
+  opacity:0;pointer-events:none;
+  transition:opacity .18s;z-index:99999;
+  box-shadow:0 8px 24px rgba(0,0,0,.3);font-size:11px;line-height:1.6;
+}
+.sc-tooltip::before{content:'';position:absolute;bottom:100%;left:20px;
+  border:6px solid transparent;border-bottom-color:#1e293b}
+.setor-card:hover .sc-tooltip{opacity:1}
+
+/* Card ATIVO — dentro do sc-active-slot, largura total do slot */
+.setor-card.active{
+  width:100%;
+  border-color:var(--brand);
+  box-shadow:0 6px 20px rgba(0,40,85,.15);
+  display:flex;flex-direction:column;
+  height:auto;
+  max-height:100%; /* respeita limite do slot */
+}
+.setor-card.active::before{content:'';position:absolute;top:0;left:0;right:0;
+  height:3px;background:var(--brand);border-radius:10px 10px 0 0}
+.setor-card.active.status-red   {border-color:var(--red);background:#fff5f5}
+.setor-card.active.status-yellow{border-color:#d97706;background:#fffdf0}
+.setor-card.active.status-green {border-color:var(--green);background:#f0fdf8}
+.setor-card.active .sc-name{color:var(--t1);font-size:12px;font-weight:800;max-width:none;white-space:normal;margin-bottom:4px}
+.setor-card.active .sc-pct-small{font-size:13px;margin-bottom:2px}
+.setor-card.active .sc-tooltip{display:none}
+
+/* Detalhes — só no active */
+.sc-details{display:none}
+.setor-card.active .sc-details{display:block;margin-top:6px;flex:1}
+.sc-detail-row{display:flex;justify-content:space-between;align-items:center;
+  padding:2px 0;border-bottom:1px solid rgba(0,0,0,.03);font-size:10px}
+.sc-detail-row:last-child{border-bottom:none}
+.sc-detail-lbl{color:var(--t3);font-size:9px}
+.sc-detail-val{font-weight:700;font-family:'JetBrains Mono',monospace;font-size:10px}
+
+/* Tooltip ⓘ — sempre acima de tudo */
+.tip-wrap{position:relative;display:inline-flex;align-items:center}
+.tip-ic{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+  border-radius:50%;background:rgba(148,163,184,.2);color:var(--t3);font-size:10px;font-weight:700;
+  cursor:help;margin-left:5px;flex-shrink:0;transition:background .15s;position:relative;z-index:10}
+.tip-ic:hover{background:var(--brand);color:white}
+.tip-box{
+  position:fixed; /* fixed para sair de qualquer overflow */
+  background:#1e293b;color:white;font-size:11px;font-weight:500;line-height:1.5;
+  padding:8px 12px;border-radius:8px;width:230px;pointer-events:none;
+  opacity:0;transition:opacity .18s;z-index:99999;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);white-space:normal;text-align:left;
+  transform:translateX(-50%) translateY(-8px);
+}
+.tip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:#1e293b}
+.tip-wrap:hover .tip-box{opacity:1}
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="pin-btn" onclick="document.getElementById('sidebar').classList.toggle('pinned')" title="Fixar">◀</div>
+  <div class="sidebar-logo">
+    <div class="logo-ic">🏪</div>
+    <div class="logo-txt"><span class="logo-main">TAUSTE</span><span class="logo-sub">Metas de Perda</span></div>
+  </div>
+  <nav class="nav">
+    <button class="nav-btn active" data-tip="Dashboard"   onclick="switchTab('dash',this)">  <span class="nav-ic">📊</span><span class="nav-lbl">Dashboard</span></button>
+    <button class="nav-btn"        data-tip="Por Filial"  onclick="switchTab('filial',this)"><span class="nav-ic">🏪</span><span class="nav-lbl">Por Filial</span></button>
+    <button class="nav-btn"        data-tip="Por Setor"   onclick="switchTab('setor',this)"> <span class="nav-ic">📦</span><span class="nav-lbl">Por Setor</span></button>
+    <button class="nav-btn"        data-tip="Alertas"     onclick="switchTab('alertas',this)"><span class="nav-ic">🚨</span><span class="nav-lbl" id="lbl-alertas">Alertas</span></button>
+    <button class="nav-btn"        data-tip="Projeção"    onclick="switchTab('projecao',this)"><span class="nav-ic">📈</span><span class="nav-lbl">Projeção</span></button>
+    <button class="nav-btn"        data-tip="Histórico"   onclick="switchTab('historico',this)"><span class="nav-ic">🕐</span><span class="nav-lbl" id="lbl-historico">Histórico</span></button>
+    <button class="nav-btn"        data-tip="Carga de Dados" onclick="switchTab('config',this)"><span class="nav-ic">⚙️</span><span class="nav-lbl">Carga de Dados</span></button>
+  </nav>
+  <div class="sidebar-foot"><span class="foot-dot"></span><span class="foot-txt" id="foot-status">Aguardando dados...</span></div>
+</aside>
+
+<main class="main">  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div class="topbar-title" id="tab-title">Dashboard</div>
+      <div class="topbar-meta" id="topbar-meta">Selecione o arquivo Excel</div>
+      <div id="topbar-data" style="font-size:11px;color:var(--t3);display:none">📅 <span id="topbar-data-txt"></span></div>
+    </div>
+    <div id="export-btns" class="hidden" style="display:flex;gap:8px">
+      <button class="btn-export pdf" onclick="exportarPDF()">
+        <span>📄</span> PDF
+      </button>
+      <button class="btn-export excel" onclick="exportarExcel()">
+        <span>📊</span> Excel
+      </button>
+    </div>
+  </header>
+  <div class="content">
+
+    <!-- CONFIG -->
+    <div id="tab-config" class="hidden fade-in">
+      <div class="card p" style="max-width:580px;margin:0 auto">
+        <div class="sec-title">Upload do Arquivo Excel</div>
+        <div id="upload-box" class="upload-box" onclick="document.getElementById('file-input').click()">
+          <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="onFileChange(this)"/>
+          <div style="font-size:36px;margin-bottom:10px">📊</div>
+          <div style="font-weight:700;font-size:14px;color:var(--t1);margin-bottom:5px">Arraste ou clique para selecionar</div>
+          <div style="font-size:11px;color:var(--t3)">Arquivo .xlsx com aba META contendo: FILIAL, SETOR, META FAT, META PERDA, REAL FAT, REAL PERDA, % ATINGIMENTO</div>
+        </div>
+        <div id="upload-info" style="text-align:center;margin-top:10px;font-size:12px;color:var(--t3)"></div>
+        <div id="progress-container" class="progress-container hidden" style="display:none">
+          <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+          <div id="progress-text" class="progress-text">0%</div>
+        </div>
+        <div style="margin-top:16px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">📋 ESTRUTURA ESPERADA — Aba META</div>
+          <div style="font-size:11px;color:var(--t3);line-height:2">
+            ANO · MÊS · FILIAL · SETOR · META FAT · META PERDA · % META PERDA · REAL FAT · REAL PERDA · % REAL PERDA · % ATINGIMENTO
+          </div>
+        </div>
+        <div style="margin-top:14px;padding:12px 14px;background:#f0fdf4;border-radius:10px;border:1px solid #a7f3d0;font-size:12px" id="cache-info">
+          <span style="color:var(--t3)">Nenhum cache salvo.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="tab-dash" class="hidden fade-in">
+      <div class="card p" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+          <span style="font-size:12px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em" id="mes-nome">Progresso do Mês</span>
+          <div style="display:flex;gap:20px">
+            <div style="text-align:center"><div style="font-size:10px;color:var(--t3);text-transform:uppercase">Dias passados</div><div id="mes-passados" style="font-size:17px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--brand)">—</div></div>
+            <div style="text-align:center"><div style="font-size:10px;color:var(--t3);text-transform:uppercase">Dias restantes</div><div id="mes-restantes" style="font-size:17px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--t2)">—</div></div>
+            <div style="text-align:center"><div style="font-size:10px;color:var(--t3);text-transform:uppercase">% do mês</div><div id="mes-pct" style="font-size:17px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--accent)">—</div></div>
+          </div>
+        </div>
+        <div style="background:#e2e8f0;border-radius:8px;height:10px;overflow:hidden">
+          <div id="mes-bar" style="height:100%;background:var(--blue);border-radius:8px;transition:width .5s;width:0%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--t3)">
+          <span>Início</span><span id="mes-hoje-lbl" style="font-weight:700;color:var(--brand)"></span><span>Fim</span>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi b"><div style="padding-left:8px">
+          <div class="kpi-lbl" style="display:flex;align-items:center">Meta Total Perda — Rede
+            <div class="tip-wrap"><span class="tip-ic">ⓘ</span><div class="tip-box">Soma da meta de perda orçada para todas as filiais da rede no período selecionado.</div></div>
+          </div>
+          <div class="kpi-val" id="kpi-meta">—</div><div class="kpi-sub" id="kpi-meta-sub">—</div>
+        </div></div>
+        <div class="kpi g"><div style="padding-left:8px">
+          <div class="kpi-lbl" style="display:flex;align-items:center">Realizado Total
+            <div class="tip-wrap"><span class="tip-ic">ⓘ</span><div class="tip-box">Soma das perdas já registradas no mês atual em todas as filiais da rede.</div></div>
+          </div>
+          <div class="kpi-val" id="kpi-real">—</div><div class="kpi-sub" id="kpi-real-sub">—</div>
+        </div></div>
+        <div class="kpi y"><div style="padding-left:8px">
+          <div class="kpi-lbl" style="display:flex;align-items:center">% Atingimento
+            <div class="tip-wrap"><span class="tip-ic">ⓘ</span><div class="tip-box">Percentual do quanto já foi consumido da meta. Acima de 100% significa que a meta de perda foi ultrapassada.</div></div>
+          </div>
+          <div class="kpi-val" id="kpi-ating">—</div><div class="kpi-sub" id="kpi-ating-sub">—</div>
+        </div></div>
+        <div class="kpi dk"><div style="padding-left:8px">
+          <div class="kpi-lbl" style="display:flex;align-items:center;color:rgba(255,255,255,.5)">Saldo da Meta
+            <div class="tip-wrap"><span class="tip-ic" style="background:rgba(255,255,255,.15);color:rgba(255,255,255,.6)">ⓘ</span><div class="tip-box">Quanto ainda resta de margem antes de atingir o limite da meta. Valor negativo indica que a meta já foi excedida.</div></div>
+          </div>
+          <div class="kpi-val" id="kpi-saldo">—</div><div class="kpi-sub" id="kpi-saldo-sub">—</div>
+        </div></div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-box"><div class="chart-title">Meta vs Realizado por Filial</div><canvas id="chart-filial" height="240"></canvas></div>
+        <div class="chart-box"><div class="chart-title">Meta vs Realizado por Setor (Top 8)</div><canvas id="chart-setor" height="240"></canvas></div>
+      </div>
+
+      <div class="card p">
+        <div class="sec-title">% de Atingimento por Filial</div>
+        <div id="ranking-filiais"></div>
+      </div>
+    </div>
+
+    <!-- POR FILIAL -->
+    <div id="tab-filial" class="hidden fade-in">
+      <div id="filial-cards" class="sel-cards"></div>
+      
+      <div class="kpi-grid" id="filial-kpis" style="grid-template-columns:repeat(5,1fr)"></div>
+
+      <!-- Bloco de Projeção da Filial -->
+      <div id="filial-proj-bloco" style="display:none;margin-bottom:18px">
+        <div class="card p">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <div class="sec-title" style="margin-bottom:0">📈 Projeção do Mês</div>
+            <div style="font-size:11px;color:var(--t3)" id="filial-proj-ref"></div>
+          </div>
+          <div class="kpi-grid" id="filial-proj-kpis" style="margin-bottom:0"></div>
+        </div>
+      </div>
+
+      <div class="filial-grid">
+        <div class="card p">
+          <div class="sec-title" id="filial-tbl-title">Detalhe por Setor</div>
+          <div class="tbl-wrap"><table>
+            <thead><tr>
+              <th onclick="sortTbl('filial','setor')">Setor <span id="si-filial-setor"></span></th>
+              <th onclick="sortTbl('filial','meta')">Meta Perda <span id="si-filial-meta"></span></th>
+              <th onclick="sortTbl('filial','real')">Realizado <span id="si-filial-real"></span></th>
+              <th onclick="sortTbl('filial','saldo')">Saldo <span id="si-filial-saldo"></span></th>
+              <th onclick="sortTbl('filial','ating')">% Ating. <span id="si-filial-ating"></span></th>
+              <th onclick="sortTbl('filial','pctMetaPerda')" title="Meta de perda como % do faturamento">% Meta Perda <span id="si-filial-pctMetaPerda"></span></th>
+              <th title="Comparativo com a média de perda da rede para este setor">vs Rede</th>
+              <th>Status</th>
+            </tr></thead>
+          <tbody id="tbody-filial"></tbody>
+          <tfoot id="tfoot-filial"></tfoot>
+          </table></div>
+        </div>
+        <div class="card p">
+          <div class="sec-title">Top 5 Setores Críticos (R$)</div>
+          <div id="filial-top-setores" style="margin-top:10px">
+            <div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Selecione uma filial</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POR SETOR -->
+    <div id="tab-setor" class="hidden fade-in">
+      <div id="setor-cards" class="setor-cards-wrap"></div>
+      <div class="card p">
+        <div class="sec-title" id="setor-tbl-title">Todas as Filiais</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr>
+            <th onclick="sortTbl('setor','filial')">Filial <span id="si-setor-filial"></span></th>
+            <th onclick="sortTbl('setor','meta')">Meta Perda <span id="si-setor-meta"></span></th>
+            <th onclick="sortTbl('setor','real')">Realizado <span id="si-setor-real"></span></th>
+            <th onclick="sortTbl('setor','saldo')">Saldo <span id="si-setor-saldo"></span></th>
+            <th onclick="sortTbl('setor','ating')">% Ating. <span id="si-setor-ating"></span></th>
+            <th onclick="sortTbl('setor','pctMetaPerda')" title="Meta de perda como % do faturamento">% Meta Perda <span id="si-setor-pctMetaPerda"></span></th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody id="tbody-setor"></tbody>
+          <tfoot id="tfoot-setor"></tfoot>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ALERTAS -->
+    <div id="tab-alertas" class="hidden fade-in">
+      <div id="alertas-container"></div>
+    </div>
+
+    <!-- HISTÓRICO -->
+    <div id="tab-historico" class="hidden fade-in">
+      <div class="kpi-grid" id="hist-kpis" style="margin-bottom:18px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+        <!-- Gráfico evolução rede -->
+        <div class="card p">
+          <div class="sec-title">Evolução da Perda — Rede Total</div>
+          <canvas id="chart-hist-rede" height="180"></canvas>
+        </div>
+        <!-- Comparativo últimas 2 cargas -->
+        <div class="card p">
+          <div class="sec-title" id="hist-comp-title">Comparativo por Filial</div>
+          <div id="hist-comp-body" style="margin-top:4px"></div>
+        </div>
+      </div>
+      <!-- Tabela de snapshots -->
+      <div class="card p">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="sec-title" style="margin-bottom:0">Cargas Salvas</div>
+          <button onclick="limparHistorico()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--red);background:white;color:var(--red);font-size:11px;font-weight:700;cursor:pointer">🗑 Limpar tudo</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Data / Hora</th>
+              <th>Arquivo</th>
+              <th>Filiais</th>
+              <th>Realizado R$</th>
+              <th>Meta R$</th>
+              <th>Atingimento</th>
+              <th>% Real Perda</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="tbody-hist"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROJEÇÃO -->
+    <div id="tab-projecao" class="hidden fade-in">
+      <div class="kpi-grid" style="margin-bottom:18px" id="proj-kpis"></div>
+      <div id="proj-risco" style="margin-bottom:16px"></div>
+      <div class="card p">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="sec-title" style="margin-bottom:0">Projeção por Filial — Valor (R$) e Taxa (%)</div>
+          <div style="font-size:11px;color:var(--t3)" id="proj-ref"></div>
+        </div>
+        <div class="tbl-wrap">
+          <table id="proj-table">
+            <thead>
+              <tr>
+                <th rowspan="2" style="vertical-align:middle">Filial</th>
+                <th colspan="4" style="text-align:center;background:#eff6ff;color:var(--blue);border-left:2px solid #bfdbfe">— Valor (R$) —</th>
+                <th colspan="3" style="text-align:center;background:#f0fdf4;color:var(--green);border-left:2px solid #bbf7d0">— Taxa (%) —</th>
+                <th rowspan="2" style="vertical-align:middle;text-align:center">Alerta</th>
+              </tr>
+              <tr>
+                <th style="background:#eff6ff;border-left:2px solid #bfdbfe">Ritmo/dia <span style="font-size:9px;opacity:.5;font-weight:400">ⓘ</span></th>
+                <th style="background:#eff6ff">Projeção mês</th>
+                <th style="background:#eff6ff">Meta R$</th>
+                <th style="background:#eff6ff">Saldo R$</th>
+                <th style="background:#f0fdf4;border-left:2px solid #bbf7d0">% Real</th>
+                <th style="background:#f0fdf4">% Meta</th>
+                <th style="background:#f0fdf4">% Proj.</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-proj"></tbody>
+            <tfoot id="tfoot-proj"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+let DATA = [];
+let charts = {};
+let sortState = {};
+let _popupSetor  = null; // setor principal aberto
+let _popupFilial = null; // filial do popup aberto
+let _setoresSel  = [];   // setores marcados para exportar
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderMesProgress();
+  restaurarCache();
+  atualizarInfoCache();
+  renderTabHistorico();
+});
+
+const FILIAL_MAP = {
+  '1 - MIAREP'  : 'TAUSTE MARILIA REPUBLICA',
+  '2 - MIATIR'  : 'TAUSTE MARILIA TIRADENTES',
+  '3 - BRURBR'  : 'TAUSTE BAURU RIO BRANCO',
+  '4 - SOCCAM'  : 'TAUSTE SOROCABA CAMPOLIM',
+  '5 - SOCITA'  : 'TAUSTE SOROCABA ITAVUVU',
+  '6 - JUNOZA'  : 'TAUSTE JUNDIAI OZANAN',
+  '7 - BRUDUQ'  : 'TAUSTE BAURU DUQUE',
+  '8 - SOCGEN'  : 'TAUSTE GENERAL CARNEIRO',
+  '9 - SJCCOL'  : 'TAUSTE SJC COLINAS',
+  '10 - CAMDOM' : 'TAUSTE CAMPINAS DOM PEDRO',
+  '11 - TAUTAU' : 'TAUSTE TAUBATE',
+  '12 - SPSAN'  : 'TAUSTE SP SANTANA',
+  '13 - SBCSBC' : 'TAUSTE SAO BERNARDO DO CAMPO',
+  '14 - REPODEP': 'TAUSTE REPUBLICA DEPOSITO',
+  '15 - RBDEP'  : 'TAUSTE RIO BRANCO DEPOSITO',
+  '16 - TIRDEP' : 'TAUSTE TIRADENTES DEPOSITO',
+  '17 - ADMMAR' : 'TAUSTE ADMINISTRATIVO MARILIA',
+  '18 - CDITU'  : 'TAUSTE CD ITU',
+  '19 - OPLOG'  : 'TAUSTE OPERADOR LOGISTICO',
+  '20 - ADMSOC' : 'TAUSTE ADMINISTRATIVO SOROCABA',
+};
+const SETORES_OK = s => !['EMBALAGEM','SUB-PRODUTO','TOTAL','ADMINISTRAÇÃO DA LOJA','JUROS'].includes(s.toUpperCase());
+
+const fmt  = v => v == null?'—':v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const fmtS = v => v == null?'—':'R$ '+Math.round(v).toLocaleString('pt-BR');
+const fmtP = v => v == null?'—':(v*100).toFixed(2)+'%';
+const nomeC = f => f.split(' ').slice(-1)[0];
+
+function statusBadge(realPct, metaPct) {
+  if (metaPct <= 0) return '<span class="badge badge-green">Dentro da meta</span>';
+  return realPct > metaPct ? '<span class="badge badge-red">Acima da meta</span>'
+       : '<span class="badge badge-green">Dentro da meta</span>';
+}
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+function updateProgress(percent) {
+  document.getElementById('progress-fill').style.width = percent + '%';
+  document.getElementById('progress-text').textContent = percent + '%';
+}
+
+function onFileChange(inp) {
+  const file = inp.files[0]; if (!file) return;
+  document.getElementById('upload-info').textContent = '⏳ Processando 0%';
+  document.getElementById('progress-container').style.display = 'flex';
+  updateProgress(0);
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      updateProgress(25);
+      document.getElementById('upload-info').textContent = '⏳ Processando 25%';
+      parseExcel(XLSX.read(e.target.result,{type:'array'}), file.name);
+    } catch(err) {
+      document.getElementById('upload-info').style.color='var(--red)';
+      document.getElementById('upload-info').textContent = '❌ Erro: '+err.message;
+      document.getElementById('progress-container').style.display = 'none';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+document.getElementById('upload-box').addEventListener('dragover', e=>e.preventDefault());
+document.getElementById('upload-box').addEventListener('drop', e=>{
+  e.preventDefault();
+  const f=e.dataTransfer.files[0]; if(!f)return;
+  const dt=new DataTransfer(); dt.items.add(f);
+  const inp=document.getElementById('file-input');
+  inp.files=dt.files; onFileChange(inp);
+});
+
+// ── Parse ─────────────────────────────────────────────────────────────────────
+// Usa array_of_arrays para evitar problema de cabeçalhos com quebra de linha
+// Colunas (0-based): 0=ANO,1=MÊS,2=FILIAL,3=SETOR,4=META FAT,5=META PERDA,
+//                    6=%META PERDA,7=REAL FAT,8=REAL PERDA,9=%REAL PERDA,10=%ATING
+function parseExcel(wb, fileName) {
+  DATA = [];
+  const sheetMeta = wb.Sheets['META'];
+  if (!sheetMeta) { alert('Aba "META" não encontrada no arquivo!'); return; }
+
+  // Limita o range para evitar processar ~1M linhas vazias que o Excel gera
+  // Descobre a última linha real pelo ref da sheet
+  const ref = sheetMeta['!ref'] || 'A1';
+  const decoded = XLSX.utils.decode_range(ref);
+  const lastRow = decoded.e.r; // última linha com dados (0-based)
+  const limitedRange = { s:{r:0,c:0}, e:{r:Math.min(lastRow, 5000), c:decoded.e.c} };
+
+  const rows = XLSX.utils.sheet_to_json(sheetMeta, {header:1, defval:0, range:limitedRange});
+  updateProgress(35);
+  document.getElementById('upload-info').textContent = '⏳ Processando 35%';
+  // rows[0] é o cabeçalho, rows[1..] são os dados — filtra vazios
+  rows.slice(1).filter(r => r[2] && r[3]).forEach(r => {
+    const cod   = String(r[2]||'').trim();
+    const setor = String(r[3]||'').trim().toUpperCase();
+    if (!cod || !setor || !SETORES_OK(setor)) return;
+    const filial = FILIAL_MAP[cod] || cod;
+    DATA.push({
+      filial, filialCurta: nomeC(filial), setor,
+      metaFat:   +r[4]  ||0,   // META FAT
+      metaPerda: +r[5]  ||0,   // META PERDA
+      realFat:   +r[7]  ||0,   // REAL FAT
+      realPerda: +r[8]  ||0,   // REAL PERDA
+      ating:     +r[10] ||0,   // % ATINGIMENTO (calculado)
+    });
+  });
+
+  const nF = [...new Set(DATA.map(d=>d.filial))].length;
+  const nS = [...new Set(DATA.map(d=>d.setor))].length;
+
+  updateProgress(50);
+  document.getElementById('upload-info').textContent = '⏳ Processando 50%';
+  document.getElementById('upload-box').classList.add('loaded');
+  document.getElementById('upload-info').style.color='#10b981';
+  document.getElementById('upload-info').textContent = `✅ ${fileName} — ${DATA.length} registros · ${nF} filiais · ${nS} setores`;
+  document.getElementById('foot-status').textContent = `${DATA.length} reg · ${nF} filiais`;
+  document.getElementById('topbar-meta').textContent = `${nF} filiais · ${nS} setores`;
+  const _agora = new Date();
+  document.getElementById('topbar-data-txt').textContent = `Dados carregados em ${_agora.toLocaleDateString('pt-BR')} às ${_agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+  document.getElementById('topbar-data').style.display = 'block';
+
+  popularSelects();
+  updateProgress(65);
+  renderMesProgress();
+  updateProgress(75);
+  renderDashboard();
+  updateProgress(85);
+  renderTabFilial();
+  renderTabSetor();
+  renderAlertas();
+  renderTabProjecao();
+  renderTabHistorico();
+  updateProgress(95);
+  switchTab('dash', document.querySelector('.nav-btn'));
+  document.getElementById('export-btns').classList.remove('hidden');
+  updateProgress(100);
+  setTimeout(() => document.getElementById('progress-container').style.display = 'none', 800);
+  // garante cards já renderizados ao entrar nas abas
+  document.getElementById('tab-filial').addEventListener('click', ()=>{}, {once:false});
+
+  // ── Salva no localStorage ──────────────────────────────────────────────────
+  try {
+    const savedAt = new Date().toISOString();
+    localStorage.setItem('tauste_meta_cache', JSON.stringify({ fileName, savedAt, data: DATA }));
+    atualizarInfoCache();
+    // Empilha no histórico
+    salvarSnapshot(fileName, savedAt);
+  } catch(e) { console.warn('Cache não salvo:', e); }
+}
+
+
+// ── Histórico de Cargas ───────────────────────────────────────────────────────
+const HIST_KEY    = 'tauste_historico';
+const HIST_MAX    = 30;
+let   charts_hist = {};
+
+function resumoSnapshot(dados) {
+  const totMeta  = dados.reduce((a,d)=>a+d.metaPerda,0);
+  const totReal  = dados.reduce((a,d)=>a+d.realPerda,0);
+  const totMetaF = dados.reduce((a,d)=>a+d.metaFat,0);
+  const totRealF = dados.reduce((a,d)=>a+d.realFat,0);
+  const nFiliais = [...new Set(dados.map(d=>d.filial))].length;
+  const realPct  = totRealF>0 ? totReal/totRealF : 0;
+  const metaPct  = totMetaF>0 ? totMeta/totMetaF : 0;
+  const ating    = totMeta>0  ? totReal/totMeta   : 0;
+  // por filial
+  const byF = {};
+  dados.forEach(d=>{
+    if(!byF[d.filial]) byF[d.filial]={metaPerda:0,realPerda:0,metaFat:0,realFat:0};
+    byF[d.filial].metaPerda+=d.metaPerda; byF[d.filial].realPerda+=d.realPerda;
+    byF[d.filial].metaFat+=d.metaFat;    byF[d.filial].realFat+=d.realFat;
+  });
+  return { totMeta, totReal, totMetaF, totRealF, nFiliais, realPct, metaPct, ating, byF };
+}
+
+function salvarSnapshot(fileName, savedAt) {
+  try {
+    const raw  = localStorage.getItem(HIST_KEY);
+    const hist = raw ? JSON.parse(raw) : [];
+    const res  = resumoSnapshot(DATA);
+    // guarda dados completos apenas nas últimas 5 cargas; nas mais antigas só o resumo
+    const snap = { savedAt, fileName, ...res, data: hist.length < 5 ? DATA : undefined };
+    hist.unshift(snap); // mais novo primeiro
+    if (hist.length > HIST_MAX) hist.splice(HIST_MAX);
+    localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+    renderTabHistorico();
+  } catch(e) { console.warn('Histórico não salvo:', e); }
+}
+
+function carregarHistorico() {
+  try {
+    const raw = localStorage.getItem(HIST_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function deletarSnapshot(idx) {
+  try {
+    const hist = carregarHistorico();
+    hist.splice(idx, 1);
+    localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+    renderTabHistorico();
+  } catch(e) {}
+}
+
+function limparHistorico() {
+  if (!confirm('Apagar todo o histórico de cargas?')) return;
+  localStorage.removeItem(HIST_KEY);
+  renderTabHistorico();
+}
+
+function renderTabHistorico() {
+  const hist = carregarHistorico();
+
+  // Label do menu
+  const lbl = document.getElementById('lbl-historico');
+  if (lbl) lbl.textContent = hist.length ? `Histórico (${hist.length})` : 'Histórico';
+
+  if (!hist.length) {
+    document.getElementById('hist-kpis').innerHTML = '';
+    document.getElementById('tbody-hist').innerHTML =
+      '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--t3)">Nenhuma carga registrada ainda.</td></tr>';
+    document.getElementById('hist-comp-body').innerHTML =
+      '<div style="color:var(--t3);font-size:12px;padding:20px 0;text-align:center">Nenhum dado disponível</div>';
+    return;
+  }
+
+  // ── KPIs do histórico ────────────────────────────────────────────────────────
+  const ultima = hist[0];
+  const anterior = hist[1];
+  const deltaReal  = anterior ? ultima.totReal  - anterior.totReal  : null;
+  const deltaAting = anterior ? ultima.ating     - anterior.ating    : null;
+
+  document.getElementById('hist-kpis').innerHTML = [
+    { l:'Cargas Registradas', v: hist.length, cls:'b', sub:`Última: ${new Date(ultima.savedAt).toLocaleDateString('pt-BR')}` },
+    { l:'Realizado Última Carga', v: fmtS(ultima.totReal), cls: ultima.totReal > ultima.totMeta ? 'r':'g',
+      sub: deltaReal !== null ? (deltaReal>0?'▲ +':'▼ ')+fmtS(Math.abs(deltaReal))+' vs carga anterior' : 'Primeira carga' },
+    { l:'Meta Rede', v: fmtS(ultima.totMeta), cls:'b', sub: `${ultima.nFiliais} filiais` },
+    { l:'Atingimento', v: fmtP(ultima.ating), cls: ultima.ating >= 1 ? 'r':'g',
+      sub: deltaAting !== null ? (deltaAting>0?'▲ Subiu ':'▼ Caiu ')+fmtP(Math.abs(deltaAting))+' vs anterior' : 'Primeira carga' },
+  ].map(k=>`<div class="kpi ${k.cls}"><div style="padding-left:8px">
+    <div class="kpi-lbl">${k.l}</div>
+    <div class="kpi-val">${k.v}</div>
+    <div class="kpi-sub">${k.sub}</div>
+  </div></div>`).join('');
+
+  // ── Gráfico evolução ─────────────────────────────────────────────────────────
+  const labels  = [...hist].reverse().map(s => new Date(s.savedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+new Date(s.savedAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
+  const realArr = [...hist].reverse().map(s => s.totReal);
+  const metaArr = [...hist].reverse().map(s => s.totMeta);
+
+  if (charts_hist.rede) charts_hist.rede.destroy();
+  charts_hist.rede = new Chart(document.getElementById('chart-hist-rede').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Realizado', data: realArr, borderColor:'#f2c811', backgroundColor:'rgba(242,200,17,.1)',
+          tension:.35, pointRadius:4, pointBackgroundColor:'#f2c811', fill:true },
+        { label:'Meta',      data: metaArr, borderColor:'#002855', backgroundColor:'rgba(0,40,85,.05)',
+          tension:.35, pointRadius:3, borderDash:[5,4], fill:false },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ labels:{ font:{family:'Plus Jakarta Sans',size:11}, color:'#475569' } },
+        tooltip:{ callbacks:{ label: c => fmt(c.raw) } } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{font:{family:'Plus Jakarta Sans',size:9},color:'#94a3b8',maxRotation:30} },
+        y:{ grid:{color:'#f1f5f9'}, ticks:{color:'#94a3b8',callback:v=>'R$'+Math.round(v/1000)+'k'} }
+      }
+    }
+  });
+
+  // ── Comparativo últimas 2 cargas por filial ──────────────────────────────────
+  if (hist.length >= 2) {
+    const A = hist[0]; // mais recente
+    const B = hist[1]; // anterior
+    const filiais = Object.keys(A.byF).sort();
+    const dtA = new Date(A.savedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const dtB = new Date(B.savedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    document.getElementById('hist-comp-title').textContent = `Comparativo: ${dtB} → ${dtA}`;
+
+    document.getElementById('hist-comp-body').innerHTML = filiais.map(f => {
+      const fA = A.byF[f] || {realPerda:0,metaPerda:0,realFat:0,metaFat:0};
+      const fB = B.byF[f] || {realPerda:0,metaPerda:0,realFat:0,metaFat:0};
+      const delta = fA.realPerda - fB.realPerda;
+      const cor   = delta > 0 ? 'var(--red)' : 'var(--green)';
+      const seta  = delta > 0 ? '▲' : delta < 0 ? '▼' : '=';
+      const pctA  = fA.realFat>0 ? fA.realPerda/fA.realFat : 0;
+      const pctB  = fB.realFat>0 ? fB.realPerda/fB.realFat : 0;
+      const nomeC = f.split(' ').slice(-1)[0];
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:11px">
+        <span style="font-weight:700;color:var(--brand);min-width:80px">${nomeC}</span>
+        <span style="color:var(--t3);font-family:'JetBrains Mono',monospace;font-size:10px">${fmtP(pctB)}</span>
+        <span style="color:${cor};font-weight:800;font-family:'JetBrains Mono',monospace;font-size:11px">${seta} ${fmtP(pctA)}</span>
+        <span style="color:${cor};font-size:10px;font-family:'JetBrains Mono',monospace">${delta>0?'+':''}${fmtS(delta)}</span>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('hist-comp-title').textContent = 'Comparativo por Filial';
+    document.getElementById('hist-comp-body').innerHTML =
+      '<div style="color:var(--t3);font-size:12px;padding:20px 0;text-align:center">Carregue ao menos 2 arquivos para ver o comparativo</div>';
+  }
+
+  // ── Tabela de snapshots ──────────────────────────────────────────────────────
+  document.getElementById('tbody-hist').innerHTML = hist.map((s, i) => {
+    const dt  = new Date(s.savedAt).toLocaleString('pt-BR');
+    const cor = s.ating >= 1 ? 'var(--red)' : s.ating >= 0.8 ? '#d97706' : 'var(--green)';
+    const pct = s.realPct;
+    const metaPct = s.metaPct;
+    const corPct = pct > metaPct ? 'var(--red)' : 'var(--green)';
+    return `<tr${i===0?' style="background:#f0f4fa"':''}>
+      <td style="font-weight:${i===0?'800':'600'};color:var(--t1);white-space:nowrap">${dt}${i===0?' <span style="font-size:9px;background:var(--brand);color:white;padding:1px 6px;border-radius:4px;margin-left:4px">ATUAL</span>':''}</td>
+      <td style="font-size:11px;color:var(--t2)">${s.fileName}</td>
+      <td style="text-align:center">${s.nFiliais}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:700">${fmtS(s.totReal)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:var(--t2)">${fmtS(s.totMeta)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:800;color:${cor}">${fmtP(s.ating)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${corPct}">${fmtP(pct)}</td>
+      <td><button onclick="deletarSnapshot(${i})" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:14px;padding:2px 4px" title="Remover esta carga">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Cache localStorage ────────────────────────────────────────────────────────
+function atualizarInfoCache() {
+  const raw = localStorage.getItem('tauste_meta_cache');
+  const el  = document.getElementById('cache-info');
+  if (!raw || !el) return;
+  try {
+    const c = JSON.parse(raw);
+    const dt = new Date(c.savedAt).toLocaleString('pt-BR');
+    el.innerHTML = `<span style="color:var(--green);font-weight:700">✅ Cache ativo</span> — <strong>${c.fileName}</strong> · salvo em ${dt} · ${c.data.length} registros
+      <button onclick="limparCache()" style="margin-left:12px;padding:3px 10px;border-radius:6px;border:1px solid var(--red);background:white;color:var(--red);font-size:11px;font-weight:700;cursor:pointer">🗑 Limpar</button>`;
+  } catch(e) {}
+}
+
+function limparCache() {
+  localStorage.removeItem('tauste_meta_cache');
+  DATA = [];
+  document.getElementById('cache-info').innerHTML = '<span style="color:var(--t3)">Nenhum cache salvo.</span>';
+  document.getElementById('upload-box').classList.remove('loaded');
+  document.getElementById('upload-info').textContent = '';
+  document.getElementById('foot-status').textContent = 'Aguardando dados...';
+  document.getElementById('topbar-meta').textContent = 'Selecione o arquivo Excel';
+  document.getElementById('export-btns').classList.add('hidden');
+}
+
+function restaurarCache() {
+  const raw = localStorage.getItem('tauste_meta_cache');
+  if (!raw) return;
+  try {
+    const c = JSON.parse(raw);
+    if (!c.data || !c.data.length) return;
+    DATA = c.data;
+    const nF = [...new Set(DATA.map(d=>d.filial))].length;
+    const nS = [...new Set(DATA.map(d=>d.setor))].length;
+    document.getElementById('upload-box').classList.add('loaded');
+    document.getElementById('upload-info').style.color = '#10b981';
+    document.getElementById('upload-info').textContent = `✅ ${c.fileName} (cache) — ${DATA.length} registros · ${nF} filiais · ${nS} setores`;
+    document.getElementById('foot-status').textContent = `${DATA.length} reg · ${nF} filiais`;
+    document.getElementById('topbar-meta').textContent = `${nF} filiais · ${nS} setores`;
+    const _dt = new Date(c.savedAt);
+    document.getElementById('topbar-data-txt').textContent = `Dados de ${_dt.toLocaleDateString('pt-BR')} às ${_dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    document.getElementById('topbar-data').style.display = 'block';
+    popularSelects();
+    renderMesProgress();
+    renderDashboard();
+    renderTabFilial();
+    renderTabSetor();
+    renderAlertas();
+    renderTabProjecao();
+    renderTabHistorico();
+    switchTab('dash', document.querySelector('.nav-btn'));
+    document.getElementById('export-btns').classList.remove('hidden');
+    atualizarInfoCache();
+  } catch(e) { console.warn('Erro ao restaurar cache:', e); }
+}
+
+// ── Selects / Cards ───────────────────────────────────────────────────────────
+let filialAtiva = '';
+let setorAtivo  = '';
+
+function popularSelects() {
+  const filiais = [...new Set(DATA.map(d=>d.filial))].sort();
+  const setores = [...new Set(DATA.map(d=>d.setor))].sort();
+  filialAtiva = '';
+  setorAtivo  = ''; // inicia sem nenhum setor selecionado → mostra total
+
+  renderFilialCards(filiais);
+  renderSetorCards(setores);
+}
+
+function statusCls(realPct, metaPct) {
+  if (metaPct <= 0) return 'status-green';
+  return realPct > metaPct ? 'status-red' : 'status-green';
+}
+function statusCor(realPct, metaPct) {
+  if (metaPct <= 0) return 'var(--green)';
+  return realPct > metaPct ? 'var(--red)' : 'var(--green)';
+}
+
+const filialMap = {
+  '1 - MIAREP': 'TAUSTE MARILIA REPUBLICA',
+  '2 - MIATIR': 'TAUSTE MARILIA TIRADENTES',
+  '3 - BRURBR': 'TAUSTE BAURU RIO BRANCO',
+  '4 - BRDUQ': 'TAUSTE BAURU DUQUE',
+  '5 - CAMDOM': 'TAUSTE CAMPINAS DOM PEDRO',
+  '10 - CAMDOM': 'TAUSTE CAMPINAS DOM PEDRO',
+  '11 - TAUTAU': 'TAUSTE TAUBATE',
+  '6 - CDITU': 'TAUSTE CD ITU',
+  '7 - GENCARN': 'TAUSTE GENERAL CARNEIRO',
+  '8 - JUNDOZAN': 'TAUSTE JUNDIAI OZANAN',
+  '9 - SJCCOL': 'TAUSTE SJC COLINAS',
+  '10 - SOROCAMPO': 'TAUSTE SOROCABA CAMPOLIM',
+  '11 - SOROITAV': 'TAUSTE SOROCABA ITAVUVU',
+  '12 - TAUBATE': 'TAUSTE TAUBATE',
+  '13 - SPSAN': 'TAUSTE SP SANTANA',
+  '14 - SBCAMPO': 'TAUSTE SAO BERNARDO DO CAMPO',
+  '15 - REPDEPO': 'TAUSTE REPUBLICA DEPOSITO',
+  '16 - RIOBDEPO': 'TAUSTE RIO BRANCO DEPOSITO',
+  '17 - TIRADEP': 'TAUSTE TIRADENTES DEPOSITO',
+  '18 - ADMARILIA': 'TAUSTE ADMINISTRATIVO MARILIA',
+  '19 - ADSOROCABA': 'TAUSTE ADMINISTRATIVO SOROCABA',
+  '20 - OPERLOG': 'TAUSTE OPERADOR LOGISTICO'
+};
+
+function getFilialNome(filialCodigo) {
+  return filialMap[filialCodigo] || filialCodigo;
+}
+
+function renderFilialCards(filiais) {
+  const agrupado = byFilial(DATA);
+  const wrap = document.getElementById('filial-cards');
+  wrap.classList.add('setor-cards-wrap');
+  wrap.classList.toggle('none-active', filialAtiva === '');
+
+  const makeCard = (f, isAct) => {
+    const d = agrupado.find(x=>x.filial===f) || {meta:0,real:0,realPct:0,metaPct:0,saldo:0};
+    const cls = statusCls(d.realPct, d.metaPct);
+    const cor = statusCor(d.realPct, d.metaPct);
+    const safe = f.replace(/'/g,"\\'");
+
+    const tooltip = `<div class="sc-tooltip"><div style="font-weight:800;font-size:12px;margin-bottom:8px;color:white">${getFilialNome(f)}</div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#94a3b8">Meta Perda</span><span style="font-weight:700;font-family:'JetBrains Mono',monospace">${fmtS(d.meta)}</span></div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#94a3b8">Realizado</span><span style="font-weight:700;font-family:'JetBrains Mono',monospace">${fmtS(d.real)}</span></div><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#94a3b8">Saldo</span><span style="font-weight:700;font-family:'JetBrains Mono',monospace;color:${d.saldo<0?'#f87171':'#34d399'}">${fmtS(d.saldo)}</span></div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:10px;color:#94a3b8"><span style="font-size:8px;text-transform:uppercase;letter-spacing:.05em">% Real Perda</span><span style="font-weight:800;font-family:'JetBrains Mono',monospace;color:${cor};font-size:11px">${fmtP(d.realPct)}</span></div></div>`;
+
+    const details = `<div class="sc-details"><div class="sc-detail-row"><span class="sc-detail-lbl">Meta Perda</span><span class="sc-detail-val">${fmtS(d.meta)}</span></div><div class="sc-detail-row"><span class="sc-detail-lbl">Realizado</span><span class="sc-detail-val">${fmtS(d.real)}</span></div><div class="sc-detail-row"><span class="sc-detail-lbl">Saldo</span><span class="sc-detail-val" style="color:${d.saldo<0?'var(--red)':'var(--green)'}">${fmtS(d.saldo)}</span></div><div style="margin-top:4px"><div style="height:4px;background:rgba(0,0,0,.08);border-radius:2px;overflow:hidden"><div style="height:100%;width:${Math.min((d.realPct/(d.metaPct||1))*100,100)}%;background:${cor};border-radius:2px"></div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:10px;color:var(--t3);padding:4px 0"><span style="font-size:8px;text-transform:uppercase;letter-spacing:.05em">% Real Perda</span><span style="font-weight:800;font-family:'JetBrains Mono',monospace;color:${cor};font-size:11px">${fmtP(d.realPct)}</span></div></div></div>`;
+
+    const closeBtn = isAct ? `<div style="position:absolute;top:6px;right:6px;cursor:pointer;font-size:14px;color:var(--t3);opacity:.6;transition:opacity .2s" onclick="event.stopPropagation();selecionarFilial('')" title="Limpar seleção">✕</div>` : '';
+    return `<div class="setor-card ${cls}${isAct?' active':''}" onclick="selecionarFilial('${safe}')" style="${isAct?'position:relative':''}">
+      ${closeBtn}
+      <div class="sc-collapsed"><span class="sc-name">${getFilialNome(f)}</span><span class="sc-pct-small" style="color:${cor}">${fmtP(d.realPct)}</span></div>
+      ${!isAct ? tooltip : ''}${details}
+    </div>`;
+  };
+
+  if (filialAtiva === '') {
+    wrap.innerHTML = `<div class="sc-others-grid">${filiais.map(f=>makeCard(f,false)).join('')}</div>`;
+  } else {
+    const outros = filiais.filter(f => f !== filialAtiva);
+    wrap.innerHTML = `
+      <div class="sc-active-slot">${makeCard(filialAtiva,true)}</div>
+      <div class="sc-others-grid">${outros.map(f=>makeCard(f,false)).join('')}</div>`;
+  }
+}
+
+function renderSetorCards(setores) {
+  const todosSetores = ['FEIRA TOTAL', ...setores];
+  const agrupado = bySetorComFeira(DATA);
+  const wrap = document.getElementById('setor-cards');
+  const nenhum = setorAtivo === '';
+  wrap.classList.toggle('none-active', nenhum);
+
+  const makeCard = (s, isAct) => {
+    const d      = agrupado.find(x=>x.setor===s) || {meta:0,real:0,realPct:0,metaPct:0,saldo:0};
+    const cls    = statusCls(d.realPct, d.metaPct);
+    const cor    = statusCor(d.realPct, d.metaPct);
+    const isCalc = s === 'FEIRA TOTAL';
+    const safe   = s.replace(/'/g,"\\'");
+
+    const tooltip = `
+      <div class="sc-tooltip">
+        <div style="font-weight:800;font-size:12px;margin-bottom:8px;color:white">${s}${isCalc?' <span style="font-size:9px;opacity:.6">(Calc)</span>':''}</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:#94a3b8">Meta Perda</span>
+          <span style="font-weight:700;font-family:'JetBrains Mono',monospace">${fmtS(d.meta)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:#94a3b8">Realizado</span>
+          <span style="font-weight:700;font-family:'JetBrains Mono',monospace">${fmtS(d.real)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span style="color:#94a3b8">Saldo</span>
+          <span style="font-weight:700;font-family:'JetBrains Mono',monospace;color:${d.saldo<0?'#f87171':'#34d399'}">${fmtS(d.saldo)}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <div style="flex:1;background:rgba(255,255,255,.08);border-radius:6px;padding:5px 7px;text-align:center">
+            <div style="color:#94a3b8;font-size:9px;margin-bottom:2px">% Real</div>
+            <div style="font-weight:800;font-family:'JetBrains Mono',monospace;color:${cor};font-size:13px">${fmtP(d.realPct)}</div>
+          </div>
+          <div style="flex:1;background:rgba(255,255,255,.08);border-radius:6px;padding:5px 7px;text-align:center">
+            <div style="color:#94a3b8;font-size:9px;margin-bottom:2px">% Meta</div>
+            <div style="font-weight:800;font-family:'JetBrains Mono',monospace;color:#60a5fa;font-size:13px">${d.metaPct>0?fmtP(d.metaPct):'—'}</div>
+          </div>
+        </div>
+      </div>`;
+
+    const details = `
+      <div class="sc-details">
+        <div class="sc-detail-row"><span class="sc-detail-lbl">Meta Perda</span><span class="sc-detail-val">${fmtS(d.meta)}</span></div>
+        <div class="sc-detail-row"><span class="sc-detail-lbl">Realizado</span><span class="sc-detail-val">${fmtS(d.real)}</span></div>
+        <div class="sc-detail-row"><span class="sc-detail-lbl">Saldo</span><span class="sc-detail-val" style="color:${d.saldo<0?'var(--red)':'var(--green)'}">${fmtS(d.saldo)}</span></div>
+        <div style="margin-top:4px">
+          <div style="height:4px;background:rgba(0,0,0,.08);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${Math.min((d.realPct/(d.metaPct||1))*100,100)}%;background:${cor};border-radius:2px"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:10px;color:var(--t3);padding:4px 0">
+            <div style="display:flex;align-items:baseline;gap:4px">
+              <span style="font-size:8px;text-transform:uppercase;letter-spacing:.05em">% Real</span>
+              <span style="font-weight:800;font-family:'JetBrains Mono',monospace;color:${cor};font-size:11px">${fmtP(d.realPct)}</span>
+            </div>
+            <div style="color:var(--border);opacity:.5">|</div>
+            <div style="display:flex;align-items:baseline;gap:4px">
+              <span style="font-size:8px;text-transform:uppercase;letter-spacing:.05em">% Meta</span>
+              <span style="font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--blue);font-size:11px">${d.metaPct>0?fmtP(d.metaPct):'—'}</span>
+            </div>
+          </div>
+        </div>
+
+      </div>`;
+
+    const closeBtn = isAct ? `<div style="position:absolute;top:6px;right:6px;cursor:pointer;font-size:14px;color:var(--t3);opacity:.6;transition:opacity .2s" onclick="event.stopPropagation();selecionarSetor('')" title="Limpar seleção">✕</div>` : '';
+    return `<div class="setor-card ${cls}${isAct?' active':''}" onclick="selecionarSetor('${safe}')" style="${isAct?'position:relative':''}">\n      ${closeBtn}
+      <div class="sc-collapsed">
+        <span class="sc-name">${s}${isCalc?'<span class="calc-tag" style="font-size:8px;padding:1px 4px">Calc</span>':''}</span>
+        <span class="sc-pct-small" style="color:${cor}">${fmtP(d.realPct)}</span>
+      </div>
+      ${!isAct ? tooltip : ''}${details}
+    </div>`;
+  };
+
+  if (nenhum) {
+    wrap.innerHTML = `<div class="sc-others-grid">${todosSetores.map(s=>makeCard(s,false)).join('')}</div>`;
+  } else {
+    const outros = todosSetores.filter(s => s !== setorAtivo);
+    wrap.innerHTML = `
+      <div class="sc-active-slot">${makeCard(setorAtivo,true)}</div>
+      <div class="sc-others-grid">${outros.map(s=>makeCard(s,false)).join('')}</div>`;
+  }
+}
+
+function selecionarFilial(f) {
+  filialAtiva = f;
+  document.querySelectorAll('#filial-cards .sel-card').forEach(el => {
+    el.classList.toggle('active', el.querySelector('.sel-card-name').textContent.trim().startsWith(f));
+  });
+  renderTabFilial();
+}
+
+function selecionarSetor(s) {
+  // Clicar no mesmo setor ativo OU passar string vazia → deseleciona
+  if (s === setorAtivo || s === '') { s = ''; }
+  setorAtivo = s;
+  renderSetorCards([...new Set(DATA.map(d=>d.setor))].sort());
+  renderTabSetor();
+}
+
+// ── Mês ───────────────────────────────────────────────────────────────────────
+function renderMesProgress() {
+  const h=new Date(), total=new Date(h.getFullYear(),h.getMonth()+1,0).getDate(), dia=h.getDate();
+  const pct=Math.round(dia/total*100);
+  const nm=h.toLocaleString('pt-BR',{month:'long',year:'numeric'});
+  document.getElementById('mes-nome').textContent     = nm.charAt(0).toUpperCase()+nm.slice(1);
+  document.getElementById('mes-passados').textContent = dia;
+  document.getElementById('mes-restantes').textContent= total-dia;
+  document.getElementById('mes-pct').textContent      = pct+'%';
+  document.getElementById('mes-hoje-lbl').textContent = 'Hoje: dia '+dia;
+  document.getElementById('mes-bar').style.width      = pct+'%';
+}
+
+// ── Agrupadores ───────────────────────────────────────────────────────────────
+function byFilial(dados) {
+  const m={};
+  dados.forEach(d=>{
+    if(!m[d.filial])m[d.filial]={filial:d.filial,curta:d.filialCurta,meta:0,real:0,metaFat:0,realFat:0};
+    m[d.filial].meta+=d.metaPerda; m[d.filial].real+=d.realPerda;
+    m[d.filial].metaFat+=d.metaFat; m[d.filial].realFat+=d.realFat;
+  });
+  return Object.values(m).map(f=>({
+    ...f,
+    saldo:f.meta-f.real,
+    metaPct:f.metaFat>0?f.meta/f.metaFat:0,
+    realPct:f.realFat>0?f.real/f.realFat:0
+  }));
+}
+function bySetor(dados) {
+  const m={};
+  dados.forEach(d=>{
+    if(!m[d.setor])m[d.setor]={setor:d.setor,meta:0,real:0,metaFat:0,realFat:0};
+    m[d.setor].meta+=d.metaPerda;
+    m[d.setor].real+=d.realPerda;
+    m[d.setor].metaFat +=d.metaFat||0;
+    m[d.setor].realFat +=d.realFat||0;
+  });
+  return Object.values(m).map(s=>({
+    ...s, 
+    saldo:s.meta-s.real,
+    metaPct:s.metaFat>0?s.meta/s.metaFat:0,
+    realPct:s.realFat>0?s.real/s.realFat:0
+  }));
+}
+
+function bySetorComFeira(dados) {
+  const base = bySetor(dados);
+  const f1 = base.find(s=>s.setor==='FEIRA 1') || {meta:0,real:0,metaFat:0,realFat:0};
+  const f2 = base.find(s=>s.setor==='FEIRA 2') || {meta:0,real:0,metaFat:0,realFat:0};
+  const ftMeta = f1.meta+f2.meta, ftReal=f1.real+f2.real, ftMetaFat=f1.metaFat+f2.metaFat, ftRealFat=f1.realFat+f2.realFat;
+  const feiraTot = {
+    setor:'FEIRA TOTAL', meta:ftMeta, real:ftReal, metaFat:ftMetaFat, realFat:ftRealFat,
+    saldo:ftMeta-ftReal, 
+    metaPct:ftMetaFat>0?ftMeta/ftMetaFat:0,
+    realPct:ftRealFat>0?ftReal/ftRealFat:0
+  };
+  return [feiraTot, ...base];
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  if (!DATA.length) return;
+  const tm=DATA.reduce((a,d)=>a+d.metaPerda,0);
+  const tr=DATA.reduce((a,d)=>a+d.realPerda,0);
+  const tmf=DATA.reduce((a,d)=>a+d.metaFat,0);
+  const trf=DATA.reduce((a,d)=>a+d.realFat,0);
+  
+  const sl=tm-tr;
+  const atingPct = tm>0?tr/tm:0;
+
+  document.getElementById('kpi-meta').textContent     = fmtS(tm);
+  document.getElementById('kpi-real').textContent     = fmtS(tr);
+  document.getElementById('kpi-ating').textContent    = fmtP(atingPct);
+  document.getElementById('kpi-saldo').textContent    = fmtS(sl);
+  document.getElementById('kpi-meta-sub').textContent = [...new Set(DATA.map(d=>d.filial))].length+' filiais';
+  document.getElementById('kpi-real-sub').textContent = [...new Set(DATA.map(d=>d.setor))].length+' setores';
+  document.getElementById('kpi-ating-sub').textContent= atingPct >= 1 ? '⚠️ Meta de perda ultrapassada' : `${fmtP(1-atingPct)} restante da meta`;
+  document.getElementById('kpi-saldo-sub').textContent= sl>=0?'Saldo disponível':'Meta excedida';
+
+  // Gráfico filiais
+  const gf = byFilial(DATA).sort((a,b)=>b.meta-a.meta);
+  if(charts.filial) charts.filial.destroy();
+  charts.filial = new Chart(document.getElementById('chart-filial').getContext('2d'),{
+    type:'bar',
+    data:{labels:gf.map(f=>f.curta),datasets:[
+      {label:'Meta Perda',data:gf.map(f=>f.meta),backgroundColor:'#002855',borderRadius:4,borderSkipped:false},
+      {label:'Realizado', data:gf.map(f=>f.real),backgroundColor:'#f2c811',borderRadius:4,borderSkipped:false},
+    ]},
+    options:{responsive:true,maintainAspectRatio:true,
+      plugins:{legend:{labels:{font:{family:'Plus Jakarta Sans',size:11},color:'#475569'}},tooltip:{callbacks:{label:c=>fmt(c.raw)}}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:'Plus Jakarta Sans',size:10},color:'#94a3b8'}},
+              y:{grid:{color:'#f1f5f9'},ticks:{color:'#94a3b8',callback:v=>'R$'+Math.round(v/1000)+'k'}}}}
+  });
+
+  // Gráfico setores
+  const gs = bySetor(DATA).sort((a,b)=>b.meta-a.meta).slice(0,8);
+  if(charts.setor) charts.setor.destroy();
+  charts.setor = new Chart(document.getElementById('chart-setor').getContext('2d'),{
+    type:'bar',
+    data:{labels:gs.map(s=>s.setor),datasets:[
+      {label:'Meta Perda',data:gs.map(s=>s.meta),backgroundColor:'#002855',borderRadius:4,borderSkipped:false},
+      {label:'Realizado', data:gs.map(s=>s.real),backgroundColor:'#f2c811',borderRadius:4,borderSkipped:false},
+    ]},
+    options:{responsive:true,maintainAspectRatio:true,indexAxis:'y',
+      plugins:{legend:{labels:{font:{family:'Plus Jakarta Sans',size:11},color:'#475569'}},tooltip:{callbacks:{label:c=>fmt(c.raw)}}},
+      scales:{x:{grid:{color:'#f1f5f9'},ticks:{color:'#94a3b8',callback:v=>'R$'+Math.round(v/1000)+'k'}},
+              y:{grid:{display:false},ticks:{font:{family:'Plus Jakarta Sans',size:10},color:'#475569'}}}}
+  });
+
+  // Ranking
+  const rank = byFilial(DATA).sort((a,b)=>b.realPct-a.realPct);
+  document.getElementById('ranking-filiais').innerHTML = rank.map(f=>{
+    const cor=statusCor(f.realPct, f.metaPct);
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px">
+        <span style="font-size:12px;font-weight:700;color:var(--brand)">${f.filial}</span>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span style="font-size:11px;color:var(--t2)">Meta: ${fmtP(f.metaPct)}</span>
+          <span style="font-size:12px;font-weight:800;color:${cor};font-family:'JetBrains Mono',monospace">${fmtP(f.realPct)}</span>
+          ${statusBadge(f.realPct, f.metaPct)}
+        </div>
+      </div>
+      <div class="prog"><div class="prog-fill" style="width:${Math.min((f.realPct/(f.metaPct||1))*100,100)}%;background:${cor}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Tab Filial ────────────────────────────────────────────────────────────────
+function renderTabFilial() {
+  const filial = filialAtiva;
+  if (!filial || !DATA.length) {
+    document.getElementById('filial-kpis').innerHTML = '';
+    document.getElementById('tbody-filial').innerHTML = '';
+    document.getElementById('filial-proj-bloco').style.display = 'none';
+    document.getElementById('filial-top-setores').innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Selecione uma filial</div>';
+    return;
+  }
+  const rows = DATA.filter(d=>d.filial===filial);
+  const tm=rows.reduce((a,d)=>a+d.metaPerda,0), tr=rows.reduce((a,d)=>a+d.realPerda,0);
+  const tmf=rows.reduce((a,d)=>a+d.metaFat,0), trf=rows.reduce((a,d)=>a+d.realFat,0);
+  
+  const metaPct = tmf>0?tm/tmf:0;
+  const realPct = trf>0?tr/trf:0;
+
+  // Projeção de Final de Mês
+  const agora = new Date();
+  const diaAtual = agora.getDate();
+  const ultimoDia = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).getDate();
+  const projecao = (tr / diaAtual) * ultimoDia;
+  const projStatus = projecao > tm ? 'r' : 'g';
+
+  document.getElementById('filial-kpis').innerHTML = [
+    {l:'Meta Perda',    v:fmtS(tm), cls:'b'},
+    {l:'Realizado',     v:fmtS(tr), cls:'g'},
+    {l:'Saldo',         v:fmtS(tm-tr), cls:tr>tm?'r':'g'},
+    {l:'% Real Perda',  v:fmtP(realPct), cls:realPct > metaPct ? 'r' : 'g'},
+    {l:'Projeção Fim do Mês', v:fmtS(projecao), cls:projStatus, sub: projecao > tm ? '⚠️ Deve exceder a meta' : '✅ Deve fechar na meta'}
+  ].map(k=>`<div class="kpi ${k.cls}"><div style="padding-left:8px"><div class="kpi-lbl">${k.l}</div><div class="kpi-val">${k.v}</div>${k.sub?`<div class="kpi-sub">${k.sub}</div>`:''}</div></div>`).join('');
+
+  // ── Bloco Projeção ──────────────────────────────────────────────────────────
+  const diasRest   = ultimoDia - diaAtual;
+  const ritmoDia   = diaAtual > 0 ? tr / diaAtual : 0;
+  const saldoR     = tm - tr;
+  const ritmoMax   = diasRest > 0 ? Math.max(0, saldoR) / diasRest : 0;
+  const folga      = ritmoMax - ritmoDia;
+  const diasMargem = ritmoDia > 0 && saldoR > 0 ? Math.floor(saldoR / ritmoDia) : (saldoR <= 0 ? 0 : Infinity);
+
+  document.getElementById('filial-proj-ref').textContent =
+    `Dia ${diaAtual} de ${ultimoDia} — ${diasRest} dia(s) restante(s)`;
+
+  document.getElementById('filial-proj-kpis').innerHTML = [
+    { l:'Ritmo Atual',          v: fmtS(ritmoDia)+'/dia',
+      cls: folga < 0 ? 'r' : 'g',
+      sub: folga < 0 ? '⚠️ Acima do ritmo permitido' : '✅ Dentro do ritmo permitido' },
+    { l:'Ritmo Máximo Permitido', v: fmtS(ritmoMax)+'/dia',
+      cls: 'b',
+      sub: `Para fechar dentro da meta` },
+    { l:'Folga por Dia',        v: (folga >= 0 ? '+' : '') + fmtS(folga),
+      cls: folga >= 0 ? 'g' : 'r',
+      sub: folga >= 0 ? 'Margem diária disponível' : 'Ritmo precisa desacelerar' },
+    { l:'Dias de Margem',       v: diasMargem === Infinity ? '∞' : diasMargem === 0 ? 'Esgotado' : diasMargem + ' dias',
+      cls: diasMargem === 0 ? 'r' : diasMargem !== Infinity && diasMargem < 5 ? 'y' : 'g',
+      sub: diasMargem === 0 ? 'Saldo já excedido' : diasMargem === Infinity ? 'Sem risco no período' : `Saldo esgota em ${diasMargem} dia(s)` },
+  ].map(k=>`<div class="kpi ${k.cls}"><div style="padding-left:8px">
+    <div class="kpi-lbl">${k.l}</div>
+    <div class="kpi-val" style="font-size:16px">${k.v}</div>
+    <div class="kpi-sub">${k.sub}</div>
+  </div></div>`).join('');
+
+  document.getElementById('filial-proj-bloco').style.display = 'block';
+
+  document.getElementById('filial-tbl-title').textContent = 'Detalhe por Setor — '+filial;
+
+  // Média da Rede por Setor (% Real Perda)
+  const mediaRede = {};
+  const setoresUnicos = [...new Set(DATA.map(d=>d.setor))];
+  setoresUnicos.forEach(s => {
+    const sRows = DATA.filter(d => d.setor === s);
+    const sReal = sRows.reduce((a,d)=>a+d.realPerda,0);
+    const sFat  = sRows.reduce((a,d)=>a+d.realFat,0);
+    mediaRede[s] = sFat > 0 ? sReal / sFat : 0;
+  });
+
+  const mappedRows = rows.map(d=>({
+    setor:d.setor, meta:d.metaPerda, real:d.realPerda,
+    saldo:d.metaPerda-d.realPerda, 
+    realPct:d.realFat>0?d.realPerda/d.realFat:0,
+    metaPct:d.metaFat>0?d.metaPerda/d.metaFat:0,
+    mediaRede: mediaRede[d.setor]
+  }));
+
+  const sorted = sortRows('filial', mappedRows);
+
+  document.getElementById('tbody-filial').innerHTML = sorted.map(r=>{
+    const cor = statusCor(r.realPct, r.metaPct);
+    const diff = r.realPct - r.mediaRede;
+    const diffCls = diff > 0.005 ? 'diff-up' : diff < -0.005 ? 'diff-down' : '';
+    const diffTxt = diff > 0.005 ? '▲ Pior' : diff < -0.005 ? '▼ Melhor' : '= Média';
+    
+    const safeSetor = r.setor.replace(/'/g,"\\'");
+    return `<tr style="cursor:pointer" onclick="abrirPopupSetor('${safeSetor}','${filial.replace(/'/g,"\\'")}')"
+      onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''">
+      <td style="font-weight:600;color:var(--t1)">${r.setor}</td>
+      <td>${fmtS(r.meta)}</td>
+      <td>${fmtS(r.real)}</td>
+      <td style="color:${r.saldo<0?'var(--red)':'var(--green)'};font-weight:600">${fmtS(r.saldo)}</td>
+      <td style="font-weight:700;font-family:'JetBrains Mono',monospace;color:${cor}">${fmtP(r.realPct)}</td>
+      <td style="font-weight:600;color:var(--blue)">${fmtP(r.metaPct)}</td>
+      <td><span class="diff-tag ${diffCls}">${diffTxt}</span></td>
+      <td>${statusBadge(r.realPct, r.metaPct)}</td>
+    </tr>`}).join('');
+
+  document.getElementById('tfoot-filial').innerHTML = `<tr>
+    <td>TOTAL</td><td>${fmtS(tm)}</td><td>${fmtS(tr)}</td>
+    <td style="color:${tr>tm?'var(--red)':'var(--green)'}">${fmtS(tm-tr)}</td>
+    <td style="color:${realPct > metaPct ? 'var(--red)' : 'var(--green)'}">${fmtP(realPct)}</td>
+    <td style="color:var(--blue)">${fmtP(metaPct)}</td>
+    <td>—</td>
+    <td>${statusBadge(realPct, metaPct)}</td></tr>`;
+
+  // Top 5 Setores Críticos
+  const top5 = [...rows].sort((a,b) => b.realPerda - a.realPerda).slice(0,5);
+  document.getElementById('filial-top-setores').innerHTML = top5.map((s, i) => {
+    const rPct = s.realFat>0?s.realPerda/s.realFat:0;
+    const mPct = s.metaFat>0?s.metaPerda/s.metaFat:0;
+    return `
+    <div class="top-item">
+      <div class="top-rank r${i+1}">${i+1}</div>
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--t1)">${s.setor}</div>
+        <div style="font-size:10px;color:var(--t3)">Perda: ${fmtS(s.realPerda)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;font-weight:800;color:${rPct > mPct ? 'var(--red)' : 'var(--t2)'}">${fmtP(rPct)}</div>
+        <div style="font-size:9px;color:var(--t3)">real</div>
+      </div>
+    </div>
+  `}).join('');
+}
+
+// ── Tab Setor ─────────────────────────────────────────────────────────────────
+function renderTabSetor() {
+  const setor = setorAtivo;
+  if (!DATA.length) return;
+
+  // Sem setor selecionado → soma todos por filial
+  if (!setor) {
+    const byF = {};
+    DATA.forEach(d => {
+      if (!byF[d.filial]) byF[d.filial] = {filial:d.filial, metaPerda:0, realPerda:0, metaFat:0, realFat:0};
+      byF[d.filial].metaPerda += d.metaPerda;
+      byF[d.filial].realPerda += d.realPerda;
+      byF[d.filial].metaFat   += d.metaFat;
+      byF[d.filial].realFat   += d.realFat;
+    });
+    const rowsBase = Object.values(byF);
+    const tm = rowsBase.reduce((a,d)=>a+d.metaPerda,0);
+    const tr = rowsBase.reduce((a,d)=>a+d.realPerda,0);
+    const tmf = rowsBase.reduce((a,d)=>a+d.metaFat,0);
+    const trf = rowsBase.reduce((a,d)=>a+d.realFat,0);
+    
+    const metaPctTotal = tmf>0?tm/tmf:0;
+    const realPctTotal = trf>0?tr/trf:0;
+
+    document.getElementById('setor-tbl-title').textContent = 'Todas as Filiais — Todos os Setores (soma geral)';
+    const sorted = sortRows('setor', rowsBase.map(d=>({
+      filial:d.filial, meta:d.metaPerda, real:d.realPerda,
+      saldo:d.metaPerda-d.realPerda,
+      realPct:d.realFat>0?d.realPerda/d.realFat:0,
+      metaPct:d.metaFat>0?d.metaPerda/d.metaFat:0,
+    })));
+    renderSetorTabela(sorted, tm, tr, metaPctTotal, realPctTotal);
+    return;
+  }
+
+  // FEIRA TOTAL: agrupa FEIRA 1 + FEIRA 2 por filial
+  let rowsBase;
+  if (setor === 'FEIRA TOTAL') {
+    const byF = {};
+    DATA.filter(d=>d.setor==='FEIRA 1'||d.setor==='FEIRA 2').forEach(d=>{
+      if(!byF[d.filial])byF[d.filial]={filial:d.filial,metaPerda:0,realPerda:0,metaFat:0,realFat:0};
+      byF[d.filial].metaPerda+=d.metaPerda;
+      byF[d.filial].realPerda+=d.realPerda;
+      byF[d.filial].metaFat  +=d.metaFat||0;
+      byF[d.filial].realFat  +=d.realFat||0;
+    });
+    rowsBase = Object.values(byF);
+  } else {
+    rowsBase = DATA.filter(d=>d.setor===setor);
+  }
+
+  const tm = rowsBase.reduce((a,d)=>a+d.metaPerda,0);
+  const tr = rowsBase.reduce((a,d)=>a+d.realPerda,0);
+  const tmf = rowsBase.reduce((a,d)=>a+(d.metaFat||0),0);
+  const trf = rowsBase.reduce((a,d)=>a+(d.realFat||0),0);
+  
+  const metaPctTotal = tmf>0?tm/tmf:0;
+  const realPctTotal = trf>0?tr/trf:0;
+
+  document.getElementById('setor-tbl-title').textContent =
+    'Todas as Filiais — '+setor+(setor==='FEIRA TOTAL'?' (FEIRA 1 + FEIRA 2)':'');
+
+  const sorted = sortRows('setor', rowsBase.map(d=>({
+    filial:d.filial, meta:d.metaPerda, real:d.realPerda,
+    saldo:d.metaPerda-d.realPerda,
+    realPct:d.realFat>0?d.realPerda/d.realFat:0,
+    metaPct:d.metaFat>0?d.metaPerda/d.metaFat:0,
+  })));
+
+  renderSetorTabela(sorted, tm, tr, metaPctTotal, realPctTotal);
+}
+
+function renderSetorTabela(sorted, tm, tr, metaPctTotal, realPctTotal) {
+  document.getElementById('tbody-setor').innerHTML = sorted.map(r=>{
+    const cor = statusCor(r.realPct, r.metaPct);
+    return `<tr>
+    <td style="font-weight:700;color:var(--brand);cursor:pointer;transition:color .15s" onmouseenter="this.style.color='var(--brand2)'" onmouseleave="this.style.color='var(--brand)'" onclick="abrirPopupFilial('${r.filial}',event)" title="Ver setores desta filial">${r.filial}</td>
+    <td>${fmtS(r.meta)}</td>
+    <td>${fmtS(r.real)}</td>
+    <td style="color:${r.saldo<0?'var(--red)':'var(--green)'};font-weight:600">${fmtS(r.saldo)}</td>
+    <td style="font-weight:700;font-family:'JetBrains Mono',monospace;color:${cor}">${fmtP(r.realPct)}</td>
+    <td style="color:var(--t2);font-family:'JetBrains Mono',monospace">${r.metaPct>0?fmtP(r.metaPct):'—'}</td>
+    <td>${statusBadge(r.realPct, r.metaPct)}</td>
+  </tr>`}).join('');
+
+  document.getElementById('tfoot-setor').innerHTML = `<tr>
+    <td>TOTAL</td>
+    <td>${fmtS(tm)}</td>
+    <td>${fmtS(tr)}</td>
+    <td style="color:${tr>tm?'var(--red)':'var(--green)'}">${fmtS(tm-tr)}</td>
+    <td style="color:${realPctTotal > metaPctTotal ? 'var(--red)' : 'var(--green)'}">${fmtP(realPctTotal)}</td>
+    <td style="color:var(--t2);font-family:'JetBrains Mono',monospace">${metaPctTotal>0?fmtP(metaPctTotal):'—'}</td>
+    <td>${statusBadge(realPctTotal, metaPctTotal)}</td>
+  </tr>`;
+}
+
+// ── Alertas ───────────────────────────────────────────────────────────────────
+function renderAlertas() {
+  if (!DATA.length) return;
+
+  // Alertas normais (por setor real)
+  const alertasBase = DATA
+    .map(d=>{
+      const rPct = d.realFat>0?d.realPerda/d.realFat:0;
+      const mPct = d.metaFat>0?d.metaPerda/d.metaFat:0;
+      return {...d, rPct, mPct};
+    })
+    .filter(d=>d.rPct > d.mPct);
+
+  // Alertas FEIRA TOTAL por filial
+  const byFeiraTot = {};
+  DATA.filter(d=>d.setor==='FEIRA 1'||d.setor==='FEIRA 2').forEach(d=>{
+    if(!byFeiraTot[d.filial])byFeiraTot[d.filial]={filial:d.filial,setor:'FEIRA TOTAL',metaPerda:0,realPerda:0,metaFat:0,realFat:0};
+    byFeiraTot[d.filial].metaPerda+=d.metaPerda;
+    byFeiraTot[d.filial].realPerda+=d.realPerda;
+    byFeiraTot[d.filial].metaFat+=d.metaFat;
+    byFeiraTot[d.filial].realFat+=d.realFat;
+  });
+  const alertasFeira = Object.values(byFeiraTot)
+    .map(d=>{
+      const rPct = d.realFat>0?d.realPerda/d.realFat:0;
+      const mPct = d.metaFat>0?d.metaPerda/d.metaFat:0;
+      return {...d, rPct, mPct};
+    })
+    .filter(d=>d.rPct > d.mPct);
+
+  const criticos = [...alertasBase, ...alertasFeira].sort((a,b)=>b.rPct-a.rPct);
+
+  // Atualiza label do menu
+  document.getElementById('lbl-alertas').textContent = criticos.length ? `Alertas (${criticos.length})` : 'Alertas';
+
+  const tblHTML = (rows) => `
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Filial</th><th>Setor</th><th>Meta Perda</th><th>Realizado</th><th>% Real</th><th>% Meta</th><th>Diferença</th></tr></thead>
+      <tbody>${rows.map(a=>`<tr>
+        <td style="font-weight:700;color:var(--brand)">${a.filial}</td>
+        <td>${a.setor}</td>
+        <td>${fmtS(a.metaPerda)}</td>
+        <td style="font-weight:700;color:var(--red)">${fmtS(a.realPerda)}</td>
+        <td style="font-weight:800;color:var(--red);font-family:'JetBrains Mono',monospace">${fmtP(a.rPct)}</td>
+        <td style="font-weight:600;color:var(--blue)">${fmtP(a.mPct)}</td>
+        <td style="font-weight:700;color:var(--red)">+${fmtP(a.rPct - a.mPct)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+
+  let html = '';
+  if (criticos.length) html += `
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:18px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:800;color:#991b1b;margin-bottom:12px">🚨 ${criticos.length} combinação(ões) ACIMA da meta de perda (% Real > % Meta)</div>
+      ${tblHTML(criticos)}
+    </div>`;
+  
+  if (!html) html = `<div style="text-align:center;padding:60px;color:var(--t3)">
+    <div style="font-size:40px;margin-bottom:12px">✅</div>
+    <div style="font-size:16px;font-weight:700;color:var(--green)">Nenhum alerta</div>
+    <div style="font-size:12px;margin-top:6px">Todas as filiais com % Real Perda dentro do % Meta Perda</div>
+  </div>`;
+
+  document.getElementById('alertas-container').innerHTML = html;
+}
+
+// ── Ordenação ─────────────────────────────────────────────────────────────────
+function sortRows(tblId, rows) {
+  const st = sortState[tblId];
+  if (!st) return rows;
+  return [...rows].sort((a,b)=>{
+    const va=a[st.col], vb=b[st.col];
+    return typeof va==='string' ? st.dir*va.localeCompare(vb,'pt-BR') : st.dir*(va-vb);
+  });
+}
+function sortTbl(tblId, col) {
+  if (!sortState[tblId]||sortState[tblId].col!==col)
+    sortState[tblId]={col, dir: col==='setor'||col==='filial'?1:-1};
+  else sortState[tblId].dir*=-1;
+  ['setor','filial','meta','real','saldo','ating','pctMetaPerda'].forEach(c=>{
+    const el=document.getElementById(`si-${tblId}-${c}`);
+    if(el)el.textContent='';
+  });
+  const ic=document.getElementById(`si-${tblId}-${col}`);
+  if(ic)ic.textContent=sortState[tblId].dir===1?' ▲':' ▼';
+  if(tblId==='filial')renderTabFilial();
+  if(tblId==='setor') renderTabSetor();
+}
+
+
+// ── Projeção ──────────────────────────────────────────────────────────────────
+function renderTabProjecao() {
+  if (!DATA.length) return;
+
+  const agora      = new Date();
+  const diaAtual   = agora.getDate();
+  const ultimoDia  = new Date(agora.getFullYear(), agora.getMonth()+1, 0).getDate();
+  const diasRest   = ultimoDia - diaAtual;
+
+  document.getElementById('proj-ref').textContent =
+    `Referência: dia ${diaAtual} de ${ultimoDia} — ${diasRest} dia(s) restante(s)`;
+
+  // Agrupamento por filial
+  const byF = {};
+  DATA.forEach(d => {
+    if (!byF[d.filial]) byF[d.filial] = {filial:d.filial, metaPerda:0, realPerda:0, metaFat:0, realFat:0};
+    byF[d.filial].metaPerda += d.metaPerda;
+    byF[d.filial].realPerda += d.realPerda;
+    byF[d.filial].metaFat   += d.metaFat;
+    byF[d.filial].realFat   += d.realFat;
+  });
+
+  const rows = Object.values(byF).map(f => {
+    // — Valor (R$)
+    const ritmoDia    = diaAtual > 0 ? f.realPerda / diaAtual : 0;
+    const projMes     = ritmoDia * ultimoDia;
+    const saldoR      = f.metaPerda - f.realPerda;
+    const diasAteEst  = ritmoDia > 0 ? saldoR / ritmoDia : Infinity; // dias até zerar o saldo
+    const vaiEstourar = projMes > f.metaPerda;
+
+    // — Taxa (%)
+    const realPct     = f.realFat > 0 ? f.realPerda / f.realFat : 0;
+    const metaPct     = f.metaFat > 0 ? f.metaPerda / f.metaFat : 0;
+    // projeção da taxa: assume que o faturamento vai manter ritmo proporcional
+    const projFat     = f.realFat > 0 ? (f.realFat / diaAtual) * ultimoDia : 0;
+    const projPerdaFat= projMes; // mesmo valor absoluto
+    const projPct     = projFat > 0 ? projPerdaFat / projFat : realPct;
+    const taxaRuim    = realPct > metaPct;
+
+    const ritmoMax  = diasRest > 0 ? Math.max(0, saldoR) / diasRest : 0;
+    const folga     = ritmoMax - ritmoDia;
+    return { ...f, ritmoDia, ritmoMax, folga, projMes, saldoR, diasAteEst, vaiEstourar,
+             realPct, metaPct, projPct, taxaRuim };
+  }).sort((a,b) => {
+    // Ordena: quem vai estourar primeiro (diasAteEst asc), depois por desvio de taxa desc
+    if (a.vaiEstourar !== b.vaiEstourar) return a.vaiEstourar ? -1 : 1;
+    return a.diasAteEst - b.diasAteEst;
+  });
+
+  // ── KPIs consolidados ────────────────────────────────────────────────────────
+  const totMeta   = rows.reduce((a,r)=>a+r.metaPerda,0);
+  const totReal   = rows.reduce((a,r)=>a+r.realPerda,0);
+  const totProj   = rows.reduce((a,r)=>a+r.projMes,0);
+  const totSaldo  = totMeta - totReal;
+  const totMetaF  = rows.reduce((a,r)=>a+r.metaFat,0);
+  const totRealF  = rows.reduce((a,r)=>a+r.realFat,0);
+  const totProjF  = totRealF > 0 ? (totRealF/diaAtual)*ultimoDia : 0;
+  const totProjPct= totProjF > 0 ? totProj/totProjF : 0;
+  const totMetaPct= totMetaF > 0 ? totMeta/totMetaF : 0;
+  const emRisco   = rows.filter(r=>r.vaiEstourar).length;
+
+  const corProj   = totProj > totMeta ? 'var(--red)' : 'var(--green)';
+  const corProjPct= totProjPct > totMetaPct ? 'var(--red)' : 'var(--green)';
+
+  document.getElementById('proj-kpis').innerHTML = [
+    {l:'Projeção Rede (R$)',   v:fmtS(totProj),    cls: totProj>totMeta?'r':'g',
+     sub: totProj>totMeta ? `⚠️ Acima da meta (${fmtS(totMeta)})` : `✅ Dentro da meta (${fmtS(totMeta)})`},
+    {l:'Saldo Disponível',     v:fmtS(totSaldo),   cls: totSaldo<0?'r':'g',
+     sub: totSaldo<0 ? 'Meta já excedida' : 'Margem restante'},
+    {l:'% Taxa Projetada',     v:fmtP(totProjPct), cls: totProjPct>totMetaPct?'r':'g',
+     sub: `Meta: ${fmtP(totMetaPct)}`},
+    {l:'Filiais em Risco',     v:emRisco,           cls: emRisco>0?'r':'g',
+     sub: emRisco>0 ? 'Vão exceder a meta no ritmo atual' : 'Nenhuma filial em risco'},
+  ].map(k=>`<div class="kpi ${k.cls}"><div style="padding-left:8px">
+    <div class="kpi-lbl">${k.l}</div>
+    <div class="kpi-val">${k.v}</div>
+    <div class="kpi-sub">${k.sub}</div>
+  </div></div>`).join('');
+
+  // ── Aviso de risco ───────────────────────────────────────────────────────────
+  const riscoRows = rows.filter(r => r.vaiEstourar);
+  document.getElementById('proj-risco').innerHTML = riscoRows.length ? `
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:18px">🚨</span>
+      <div>
+        <div style="font-size:13px;font-weight:800;color:#991b1b;margin-bottom:2px">${riscoRows.length} filial(is) devem exceder a meta de perda em R$ no ritmo atual</div>
+        <div style="font-size:11px;color:#b91c1c">${riscoRows.map(r=>`<strong>${r.filial.split(' ').slice(-1)[0]}</strong> (proj. ${fmtS(r.projMes)} vs meta ${fmtS(r.metaPerda)})`).join(' · ')}</div>
+      </div>
+    </div>` : `
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:16px">✅</span>
+      <span style="font-size:12px;font-weight:700;color:#065f46">Nenhuma filial deve exceder a meta de perda em R$ no ritmo atual</span>
+    </div>`;
+
+  // ── Tabela ───────────────────────────────────────────────────────────────────
+  const thBl = 'border-left:2px solid #bfdbfe';
+  const thGr = 'border-left:2px solid #bbf7d0';
+
+  document.getElementById('tbody-proj').innerHTML = rows.map(r => {
+    const risco     = r.vaiEstourar;
+    const taxaRuim  = r.taxaRuim;
+    const rowBg     = risco ? 'background:#fff5f5' : '';
+    const corSaldo  = r.saldoR < 0 ? 'var(--red)' : 'var(--green)';
+    const corProj   = risco ? 'var(--red)' : 'var(--green)';
+    const corReal   = statusCor(r.realPct, r.metaPct);
+    const corProjPct= r.projPct > r.metaPct ? 'var(--red)' : 'var(--green)';
+
+    // Alerta composto
+    let alertas = [];
+    if (risco)    alertas.push(`<span class="badge badge-red">R$ Excede</span>`);
+    if (taxaRuim) alertas.push(`<span class="badge badge-red">% Excede</span>`);
+    if (!risco && !taxaRuim) alertas.push(`<span class="badge badge-green">OK</span>`);
+
+    return `<tr style="${rowBg}">
+      <td style="font-weight:700;color:var(--brand);font-size:11px">${r.filial}</td>
+      <td style="${thBl};font-family:'JetBrains Mono',monospace;font-size:11px;position:relative">
+        <div class="tip-wrap" style="display:inline-flex;align-items:center;gap:4px">
+          <span>${fmtS(r.ritmoDia)}</span>
+          <span class="tip-ic" style="font-size:9px;width:13px;height:13px">ⓘ</span>
+          <div class="tip-box" style="width:280px;white-space:nowrap">
+            <div style="margin-bottom:5px;font-weight:800;color:#e2e8f0">Ritmo diário</div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:#94a3b8">Atual (média)</span><span>${fmtS(r.ritmoDia)}/dia</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:#94a3b8">Máximo permitido</span><span style="color:${r.folga>=0?'#34d399':'#f87171'}">${fmtS(r.ritmoMax)}/dia</span></div>
+            <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.1);padding-top:4px;margin-top:2px"><span style="color:#94a3b8">Folga/dia</span><span style="font-weight:800;color:${r.folga>=0?'#34d399':'#f87171'}">${r.folga>=0?'+':''}${fmtS(r.folga)}</span></div>
+          </div>
+        </div>
+      </td>
+      <td style="font-weight:800;color:${corProj};font-family:'JetBrains Mono',monospace;font-size:11px">${fmtS(r.projMes)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${fmtS(r.metaPerda)}</td>
+      <td style="font-weight:700;color:${corSaldo};font-family:'JetBrains Mono',monospace;font-size:11px">${fmtS(r.saldoR)}</td>
+      <td style="${thGr};font-weight:700;color:${corReal};font-family:'JetBrains Mono',monospace;font-size:11px">${fmtP(r.realPct)}</td>
+      <td style="color:var(--blue);font-family:'JetBrains Mono',monospace;font-size:11px">${fmtP(r.metaPct)}</td>
+      <td style="font-weight:700;color:${corProjPct};font-family:'JetBrains Mono',monospace;font-size:11px">${fmtP(r.projPct)}</td>
+      <td style="text-align:center">${alertas.join(' ')}</td>
+    </tr>`;
+  }).join('');
+
+  // Rodapé totais
+  const corProjT   = totProj > totMeta ? 'var(--red)' : 'var(--green)';
+  const corSaldoT  = totSaldo < 0 ? 'var(--red)' : 'var(--green)';
+  const corRealT   = statusCor(totRealF>0?totReal/totRealF:0, totMetaF>0?totMeta/totMetaF:0);
+  const corProjPctT= totProjPct > totMetaPct ? 'var(--red)' : 'var(--green)';
+  const ritmoDiaT  = diaAtual>0 ? totReal/diaAtual : 0;
+
+  document.getElementById('tfoot-proj').innerHTML = `<tr>
+    <td>REDE TOTAL</td>
+    <td style="${thBl}">${fmtS(ritmoDiaT)}</td>
+    <td style="color:${corProjT};font-weight:800">${fmtS(totProj)}</td>
+    <td>${fmtS(totMeta)}</td>
+    <td style="color:${corSaldoT}">${fmtS(totSaldo)}</td>
+    <td style="${thGr};color:${corRealT}">${fmtP(totRealF>0?totReal/totRealF:0)}</td>
+    <td style="color:var(--blue)">${fmtP(totMetaPct)}</td>
+    <td style="color:${corProjPctT}">${fmtP(totProjPct)}</td>
+    <td></td>
+  </tr>`;
+}
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
+const TABS=['dash','filial','setor','alertas','projecao','historico','config'];
+const TITLES={dash:'Dashboard',filial:'Por Filial',setor:'Por Setor',alertas:'Alertas',projecao:'Projeção',historico:'Histórico de Cargas',config:'Carga de Dados'};
+function switchTab(id, btn) {
+  TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.remove('hidden');
+  document.getElementById('tab-'+id).classList.add('fade-in');
+  if(btn)btn.classList.add('active');
+  document.getElementById('tab-title').textContent=TITLES[id];
+}
+
+// ── Tooltip com position:fixed — reposiciona no hover ─────────────────────────
+document.addEventListener('mouseover', e => {
+  const ic = e.target.closest('.tip-ic');
+  if (!ic) return;
+  const box = ic.nextElementSibling;
+  if (!box || !box.classList.contains('tip-box')) return;
+  const rect = ic.getBoundingClientRect();
+  box.style.left  = (rect.left + rect.width/2) + 'px';
+  box.style.top   = (rect.top - 12) + 'px';
+  box.style.transform = 'translateX(-50%) translateY(-100%)';
+});
+
+function fecharExpandidoAoClicarVazio(event) {
+  const target = event.target;
+  const wrap = target.closest('.setor-cards-wrap') || target.closest('#filial-cards');
+  if (!wrap) return;
+  
+  // Se clicou no grid vazio (não em um card)
+  if (target === wrap || target.classList.contains('sc-others-grid')) {
+    if (wrap.id === 'setor-cards') selecionarSetor('');
+    else selecionarFilial('');
+  }
+}
+
+// ── Exportação ────────────────────────────────────────────────────────────────
+function exportarPDF() {
+  const element = document.querySelector('.content');
+  const opt = {
+    margin: [10, 10],
+    filename: 'dashboard_tauste.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+  };
+  
+  // Feedback visual
+  const btn = document.querySelector('.btn-export.pdf');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<span>⏳</span> Gerando...';
+  btn.style.opacity = '0.6';
+  
+  html2pdf().set(opt).from(element).save().then(() => {
+    btn.innerHTML = originalText;
+    btn.style.opacity = '1';
+  });
+}
+
+function exportarExcel() {
+  const activeTab = TABS.find(t => !document.getElementById('tab-'+t).classList.contains('hidden'));
+  let tableId = '';
+  let fileName = 'relatorio_tauste.xlsx';
+  
+  if (activeTab === 'filial') {
+    tableId = 'tbody-filial';
+    fileName = 'detalhe_por_setor_' + (filialAtiva || 'geral') + '.xlsx';
+  } else if (activeTab === 'setor') {
+    tableId = 'tbody-setor';
+    fileName = 'detalhe_por_filial_' + (setorAtivo || 'geral') + '.xlsx';
+  } else {
+    alert('Para exportar Excel, selecione a aba "Por Filial" ou "Por Setor" para baixar os dados da tabela.');
+    return;
+  }
+
+  const table = document.getElementById(tableId).parentElement;
+  const wb = XLSX.utils.table_to_book(table, { sheet: "Dados" });
+  XLSX.writeFile(wb, fileName);
+}
+
+
+
+
+// ── Popup de Setor (dentro de Filial) ────────────────────────────────────────
+function abrirPopupSetor(setor, filial) {
+  const popup   = document.getElementById('setor-popup');
+  const overlay = document.getElementById('setor-popup-overlay');
+  if (!popup) return;
+
+  const rows = DATA.filter(d => d.filial === filial && d.setor === setor);
+  if (!rows.length) return;
+
+  const tm  = rows.reduce((a,d)=>a+d.metaPerda,0);
+  const tr  = rows.reduce((a,d)=>a+d.realPerda,0);
+  const tmf = rows.reduce((a,d)=>a+d.metaFat,0);
+  const trf = rows.reduce((a,d)=>a+d.realFat,0);
+  const sl      = tm - tr;
+  const realPct = trf>0 ? tr/trf : 0;
+  const metaPct = tmf>0 ? tm/tmf : 0;
+  const cor     = statusCor(realPct, metaPct);
+
+  // Projeção
+  const agora    = new Date();
+  const diaAtual = agora.getDate();
+  const ultimoDia= new Date(agora.getFullYear(), agora.getMonth()+1, 0).getDate();
+  const diasRest = ultimoDia - diaAtual;
+  const projMes  = diaAtual > 0 ? (tr / diaAtual) * ultimoDia : 0;
+  const ritmoDia = diaAtual > 0 ? tr / diaAtual : 0;
+  const saldoR   = tm - tr;
+  const ritmoMax = diasRest > 0 ? Math.max(0, saldoR) / diasRest : 0;
+  const folga    = ritmoMax - ritmoDia;
+  const diasMarg = ritmoDia > 0 && saldoR > 0 ? Math.floor(saldoR / ritmoDia) : (saldoR <= 0 ? 0 : Infinity);
+
+  // guarda estado para seletor e PDF
+  _popupSetor  = setor;
+  _popupFilial = filial;
+  _setoresSel  = [setor];
+  // reset botões
+  const btnPdf = document.getElementById('sp-btn-pdf');
+  const btnSel = document.getElementById('sp-btn-setores');
+  if(btnPdf){ btnPdf.textContent='📄 Exportar PDF'; }
+  if(btnSel){ btnSel.textContent='＋ Setores'; btnSel.classList.remove('ativo'); }
+
+  document.getElementById('sp-title').textContent   = setor;
+  document.getElementById('sp-subtitle').textContent = filial + '  ·  Dia ' + diaAtual + ' de ' + ultimoDia;
+
+  const kpiGeral = [
+    { l:'Meta Perda',  v:fmtS(tm),      cls:'b' },
+    { l:'Realizado',   v:fmtS(tr),      cls: tr>tm?'r':'g' },
+    { l:'Saldo',       v:fmtS(sl),      cls: sl<0?'r':'g', sub: sl<0?'Meta excedida':'Margem disponível' },
+    { l:'% Real Perda',v:fmtP(realPct), cls: realPct>metaPct?'r':'g' },
+    { l:'% Meta Perda',v:fmtP(metaPct), cls:'b' },
+  ];
+
+  const kpiProj = [
+    { l:'Ritmo Atual',    v:fmtS(ritmoDia)+'/dia', cls: folga<0?'r':'g',
+      sub: folga<0?'Acima do permitido':'Dentro do limite' },
+    { l:'Projeção Mês',   v:fmtS(projMes), cls: projMes>tm?'r':'g',
+      sub: projMes>tm?'⚠️ Deve exceder a meta':'✅ Deve fechar na meta' },
+    { l:'Ritmo Máx/dia',  v:fmtS(ritmoMax)+'/dia', cls:'b',
+      sub:'Para fechar dentro da meta' },
+    { l:'Dias de Margem', v: diasMarg===Infinity?'∞':diasMarg===0?'Esgotado':diasMarg+' dias',
+      cls: diasMarg===0?'r':diasMarg!==Infinity&&diasMarg<5?'y':'g',
+      sub: diasMarg===0?'Saldo já excedido':diasMarg===Infinity?'Sem risco no período':'Saldo esgota em '+diasMarg+' dia(s)' },
+  ];
+
+  const renderKpis = (kpis, cols) => `
+    <div class="sp-kpi-row cols-${cols}">
+      ${kpis.map(k=>`<div class="sp-kpi ${k.cls}">
+        <div class="sp-kpi-lbl">${k.l}</div>
+        <div class="sp-kpi-val">${k.v}</div>
+        ${k.sub?`<div class="sp-kpi-sub">${k.sub}</div>`:''}
+      </div>`).join('')}
+    </div>`;
+
+  document.getElementById('sp-body').innerHTML = `
+    <div class="sp-section-lbl">Visão Geral</div>
+    ${renderKpis(kpiGeral, 5)}
+    <div class="sp-section-lbl">Projeção do Mês</div>
+    ${renderKpis(kpiProj, 4)}
+  `;
+
+  popup.classList.add('show');
+  overlay.style.display = 'block';
+}
+
+
+// ── Seletor de Setores ────────────────────────────────────────────────────────
+function abrirSeletorSetores() {
+  if (!_popupFilial) return;
+  const setoresDaFilial = [...new Set(DATA.filter(d=>d.filial===_popupFilial).map(d=>d.setor))].sort();
+
+  document.getElementById('sel-pop-sub').textContent = _popupFilial;
+
+  document.getElementById('sel-pop-grid').innerHTML = setoresDaFilial.map(s => {
+    const fixo    = s === _popupSetor;
+    const marcado = _setoresSel.includes(s);
+    return `<div class="sel-item${marcado||fixo?' checked':''}${fixo?' sel-item-fixed':''}"
+      onclick="${fixo?'':` toggleSetorSel('${s.replace(/'/g,"\\'")}',this)`}">
+      <div class="sel-check"></div>
+      <div class="sel-item-name">${s}${fixo?' <span style="font-size:9px;opacity:.6">(principal)</span>':''}</div>
+    </div>`;
+  }).join('');
+
+  atualizarContadorSel();
+  document.getElementById('seletor-overlay').style.display = 'block';
+  document.getElementById('seletor-popup').classList.add('show');
+}
+
+function toggleSetorSel(setor, el) {
+  const idx = _setoresSel.indexOf(setor);
+  if (idx === -1) { _setoresSel.push(setor); el.classList.add('checked'); }
+  else            { _setoresSel.splice(idx,1); el.classList.remove('checked'); }
+  atualizarContadorSel();
+}
+
+function atualizarContadorSel() {
+  const n = _setoresSel.length;
+  document.getElementById('sel-pop-count').innerHTML =
+    `<strong>${n}</strong> setor${n!==1?'es':''} selecionado${n!==1?'s':''}`;
+}
+
+function fecharSeletorSetores() {
+  document.getElementById('seletor-popup').classList.remove('show');
+  document.getElementById('seletor-overlay').style.display = 'none';
+}
+
+function confirmarSetores() {
+  fecharSeletorSetores();
+  const n   = _setoresSel.length;
+  const btn = document.getElementById('sp-btn-pdf');
+  btn.textContent = n > 1 ? `📄 Exportar PDF (${n})` : '📄 Exportar PDF';
+  const btnS = document.getElementById('sp-btn-setores');
+  btnS.classList.toggle('ativo', n > 1);
+  btnS.textContent = n > 1 ? `＋ Setores (${n})` : '＋ Setores';
+}
+
+function fecharPopupSetor() {
+  document.getElementById('setor-popup').classList.remove('show');
+  document.getElementById('setor-popup-overlay').style.display = 'none';
+}
+
+function gerarBlocoSetor(setor, filial) {
+  const rows = DATA.filter(d => d.filial === filial && d.setor === setor);
+  if (!rows.length) return '';
+  const tm  = rows.reduce((a,d)=>a+d.metaPerda,0);
+  const tr  = rows.reduce((a,d)=>a+d.realPerda,0);
+  const tmf = rows.reduce((a,d)=>a+d.metaFat,0);
+  const trf = rows.reduce((a,d)=>a+d.realFat,0);
+  const sl      = tm - tr;
+  const realPct = trf>0?tr/trf:0;
+  const metaPct = tmf>0?tm/tmf:0;
+  const agora    = new Date();
+  const diaAtual = agora.getDate();
+  const ultimoDia= new Date(agora.getFullYear(),agora.getMonth()+1,0).getDate();
+  const diasRest = ultimoDia - diaAtual;
+  const projMes  = diaAtual>0?(tr/diaAtual)*ultimoDia:0;
+  const ritmoDia = diaAtual>0?tr/diaAtual:0;
+  const ritmoMax = diasRest>0?Math.max(0,sl)/diasRest:0;
+  const folga    = ritmoMax-ritmoDia;
+  const diasMarg = ritmoDia>0&&sl>0?Math.floor(sl/ritmoDia):(sl<=0?0:Infinity);
+
+  const kG = [
+    {l:'Meta Perda', v:fmtS(tm),      cls:'b'},
+    {l:'Realizado',  v:fmtS(tr),      cls:tr>tm?'r':'g'},
+    {l:'Saldo',      v:fmtS(sl),      cls:sl<0?'r':'g', sub:sl<0?'Meta excedida':'Margem disponível'},
+    {l:'% Real Perda',v:fmtP(realPct),cls:realPct>metaPct?'r':'g'},
+    {l:'% Meta Perda',v:fmtP(metaPct),cls:'b'},
+  ];
+  const kP = [
+    {l:'Ritmo Atual',   v:fmtS(ritmoDia)+'/dia', cls:folga<0?'r':'g', sub:folga<0?'Acima do permitido':'Dentro do limite'},
+    {l:'Projeção Mês',  v:fmtS(projMes),          cls:projMes>tm?'r':'g', sub:projMes>tm?'⚠️ Deve exceder':'✅ Dentro da meta'},
+    {l:'Ritmo Máx/dia', v:fmtS(ritmoMax)+'/dia',  cls:'b', sub:'Para fechar na meta'},
+    {l:'Dias de Margem',v:diasMarg===Infinity?'∞':diasMarg===0?'Esgotado':diasMarg+' dias',
+      cls:diasMarg===0?'r':diasMarg!==Infinity&&diasMarg<5?'y':'g',
+      sub:diasMarg===0?'Saldo já excedido':diasMarg===Infinity?'Sem risco':'Saldo esgota em '+diasMarg+' dia(s)'},
+  ];
+  const row = (kpis,cols) => `<div class="sp-kpi-row cols-${cols}">${kpis.map(k=>`
+    <div class="sp-kpi ${k.cls}">
+      <div class="sp-kpi-lbl">${k.l}</div>
+      <div class="sp-kpi-val">${k.v}</div>
+      ${k.sub?`<div class="sp-kpi-sub">${k.sub}</div>`:''}
+    </div>`).join('')}</div>`;
+
+  return `<div class="setor-bloco">
+    <div class="setor-bloco-header">${setor}</div>
+    <div class="sp-section-lbl">Visão Geral</div>${row(kG,5)}
+    <div class="sp-section-lbl">Projeção do Mês</div>${row(kP,4)}
+  </div>`;
+}
+
+function exportarPDFSetor() {
+  const filial  = _popupFilial;
+  const agora   = new Date().toLocaleString('pt-BR');
+  const subtit  = document.getElementById('sp-subtitle').textContent;
+  const diaRef  = subtit.split('·').slice(1).join('·').trim();
+
+  const blocos = _setoresSel.map(s => gerarBlocoSetor(s, filial)).join('');
+
+  const janela = window.open('', '_blank');
+  janela.document.write(`<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8"/>
+    <title>Relatório ${filial}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+    <style>
+      :root{--brand:#002855;--accent:#f2c811;--red:#ef4444;--green:#10b981;--blue:#3b82f6;--border:#e2e8f0;--t1:#0f172a;--t2:#475569;--t3:#94a3b8}
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Plus Jakarta Sans',sans-serif;background:white;color:var(--t1);padding:24px 28px}
+      .pdf-header{display:flex;justify-content:space-between;align-items:flex-start;
+        padding-bottom:14px;border-bottom:3px solid var(--brand);margin-bottom:20px}
+      .pdf-logo{font-size:20px;font-weight:800;color:var(--brand);letter-spacing:-.5px}
+      .pdf-logo span{color:var(--accent)}
+      .pdf-filial{font-size:12px;font-weight:700;color:var(--t2);margin-top:3px}
+      .pdf-meta{text-align:right;font-size:10px;color:var(--t3);line-height:1.7}
+      .setor-bloco{margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+      .setor-bloco:last-child{border-bottom:none}
+      .setor-bloco-header{font-size:14px;font-weight:800;color:var(--brand);
+        margin-bottom:14px;padding:8px 12px;background:#f0f4fa;border-radius:8px;
+        border-left:4px solid var(--brand)}
+      .sp-section-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+        color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+      .sp-section-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+      .sp-kpi-row{display:grid;gap:8px;margin-bottom:14px}
+      .sp-kpi-row.cols-5{grid-template-columns:repeat(5,1fr)}
+      .sp-kpi-row.cols-4{grid-template-columns:repeat(4,1fr)}
+      .sp-kpi{background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;position:relative;overflow:hidden}
+      .sp-kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:8px 0 0 8px}
+      .sp-kpi.r::before{background:var(--red)}.sp-kpi.g::before{background:var(--green)}
+      .sp-kpi.b::before{background:var(--blue)}.sp-kpi.y::before{background:#f2c811}
+      .sp-kpi-lbl{font-size:8px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+      .sp-kpi-val{font-size:14px;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1}
+      .sp-kpi.r .sp-kpi-val{color:var(--red)}.sp-kpi.g .sp-kpi-val{color:var(--green)}
+      .sp-kpi.b .sp-kpi-val{color:var(--blue)}.sp-kpi.y .sp-kpi-val{color:#d97706}
+      .sp-kpi-sub{font-size:8px;color:var(--t3);margin-top:3px}
+      .pdf-foot{margin-top:20px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--t3);text-align:center}
+      @page{size:A4 landscape;margin:15mm}
+      @media print{body{padding:0}}
+    </style>
+  </head><body>
+    <div class="pdf-header">
+      <div>
+        <div class="pdf-logo">TAUSTE<span> ●</span></div>
+        <div class="pdf-filial">${filial}</div>
+      </div>
+      <div class="pdf-meta">
+        Relatório de Perda por Setor<br>
+        ${diaRef}<br>
+        Emitido em ${agora}
+      </div>
+    </div>
+    ${blocos}
+    <div class="pdf-foot">Tauste — Dashboard de Metas de Perda · Gerado automaticamente em ${agora}</div>
+    <script>window.onload=()=>{window.print()}<\/script>
+  </body></html>`);
+  janela.document.close();
+}
+
+document.addEventListener('keydown', e => { if(e.key==='Escape') fecharPopupSetor(); });
+
+// ── Popup flutuante: setores de uma filial ─────────────────────────────────
+function abrirPopupFilial(filial, event) {
+  event.stopPropagation();
+  const popup   = document.getElementById('filial-popup');
+  const overlay = document.getElementById('popup-overlay');
+  if (!popup) return;
+
+  const rows = DATA.filter(d => d.filial === filial);
+  if (!rows.length) return;
+
+  const tm  = rows.reduce((a,d)=>a+d.metaPerda,0);
+  const tr  = rows.reduce((a,d)=>a+d.realPerda,0);
+  const tmf = rows.reduce((a,d)=>a+d.metaFat,0);
+  const trf = rows.reduce((a,d)=>a+d.realFat,0);
+  const sl       = tm-tr;
+  const realPct  = trf>0?tr/trf:0;   // % real perda — mesma lógica da tabela
+  const metaPct  = tmf>0?tm/tmf:0;   // % meta perda — mesma lógica da tabela
+  const corFilial = statusCor(realPct, metaPct);
+
+  document.getElementById('fp-title').textContent = filial;
+
+  document.getElementById('fp-kpis').innerHTML = [
+    {l:'Meta Perda',    v:fmtS(tm),      c:'var(--blue)'},
+    {l:'Realizado',     v:fmtS(tr),      c:'var(--green)'},
+    {l:'Saldo',         v:fmtS(sl),      c:sl>=0?'var(--green)':'var(--red)'},
+    {l:'% Real Perda',  v:fmtP(realPct), c:corFilial},
+    {l:'% Meta Perda',  v:fmtP(metaPct), c:'var(--blue)'},
+  ].map(k=>`<div class="fp-kpi">
+    <div class="fp-kpi-lbl">${k.l}</div>
+    <div class="fp-kpi-val" style="color:${k.c}">${k.v}</div>
+  </div>`).join('');
+
+  const setores = rows
+    .map(d=>({
+      setor:   d.setor,
+      meta:    d.metaPerda,
+      real:    d.realPerda,
+      realPct: d.realFat>0  ? d.realPerda/d.realFat  : 0,
+      metaPct: d.metaFat>0  ? d.metaPerda/d.metaFat  : 0,
+    }))
+    .sort((a,b)=> (b.realPct - b.metaPct) - (a.realPct - a.metaPct)); // piores primeiro
+
+  document.getElementById('fp-body').innerHTML = setores.map(s=>{
+    const cor = statusCor(s.realPct, s.metaPct);
+    return `<div class="fp-row">
+      <span class="fp-setor-name">${s.setor}</span>
+      <div class="fp-row-vals">
+        <span class="fp-val-meta" title="% Meta Perda">${fmtP(s.metaPct)}</span>
+        <span class="fp-val-ating" style="color:${cor}" title="% Real Perda">${fmtP(s.realPct)}</span>
+        ${statusBadge(s.realPct, s.metaPct)}
+      </div>
+    </div>`;
+  }).join('');
+
+  const popH=Math.min(460, 180+setores.length*36);
+  popup.style.left='50%';
+  popup.style.top='50%';
+  popup.style.transform='translate(-50%, -50%)';
+  popup.classList.add('show');
+  overlay.style.display='block';
+}
+
+function fecharPopupFilial() {
+  const p=document.getElementById('filial-popup');
+  const o=document.getElementById('popup-overlay');
+  if(p) p.classList.remove('show');
+  if(o) o.style.display='none';
+}
+
+document.addEventListener('keydown', e => { if(e.key==='Escape') fecharPopupFilial(); });
+</script>
+
+<style>
+.filial-popup{position:fixed;background:white;border:1px solid var(--border);border-radius:14px;
+  width:400px;max-height:460px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.22);
+  z-index:9999;display:none;flex-direction:column}
+.filial-popup.show{display:flex!important}
+.fp-header{display:flex;justify-content:space-between;align-items:center;
+  padding:14px 18px;border-bottom:1px solid var(--border);background:var(--brand);
+  border-radius:14px 14px 0 0;flex-shrink:0}
+.fp-title{font-size:13px;font-weight:800;color:white;line-height:1.2}
+.fp-close{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;
+  font-size:20px;padding:0 2px;line-height:1}
+.fp-close:hover{color:white}
+.fp-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;
+  padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;background:#f8fafc}
+.fp-kpi{text-align:center;padding:6px 4px}
+.fp-kpi-lbl{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}
+.fp-kpi-val{font-size:13px;font-weight:800;font-family:'JetBrains Mono',monospace}
+.fp-body{overflow-y:auto;padding:8px;flex:1}
+.fp-row{display:flex;justify-content:space-between;align-items:center;
+  padding:7px 10px;border-radius:8px;margin-bottom:2px;font-size:12px;transition:background .12s}
+.fp-row:hover{background:#f8fafc}
+.fp-setor-name{font-weight:600;color:var(--t1);min-width:100px}
+.fp-row-vals{display:flex;gap:10px;align-items:center}
+.fp-val-meta{color:var(--t3);font-size:11px;font-family:'JetBrains Mono',monospace}
+.fp-val-ating{font-weight:800;font-family:'JetBrains Mono',monospace;font-size:12px;min-width:42px;text-align:right}
+</style>
+
+<!-- Popup de setores por filial -->
+<div id="filial-popup" class="filial-popup">
+  <div class="fp-header">
+    <span class="fp-title" id="fp-title"></span>
+    <button class="fp-close" onclick="fecharPopupFilial()">✕</button>
+  </div>
+  <div class="fp-kpis" id="fp-kpis"></div>
+  <div class="fp-body"  id="fp-body"></div>
+</div>
+<!-- Overlay: fechar popup ao clicar fora -->
+<div id="popup-overlay"
+     style="display:none;position:fixed;inset:0;z-index:9998"
+     onclick="fecharPopupFilial()"></div>
+
+<!-- ── CSS Popup Setor ──────────────────────────────────────────────────── -->
+<style>
+.setor-popup {
+  position:fixed;background:white;border:1px solid var(--border);
+  border-radius:16px;width:min(760px,95vw);max-height:90vh;
+  overflow:hidden;display:none;flex-direction:column;
+  box-shadow:0 24px 64px rgba(0,0,0,.22);z-index:10000;
+  left:50%;top:50%;transform:translate(-50%,-50%);
+}
+.setor-popup.show{display:flex!important}
+.sp-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 20px;background:var(--brand);border-radius:16px 16px 0 0;flex-shrink:0;
+}
+.sp-title{font-size:14px;font-weight:800;color:white;line-height:1.2}
+.sp-subtitle{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px}
+.sp-header-actions{display:flex;align-items:center;gap:10px}
+.sp-btn-pdf{
+  display:inline-flex;align-items:center;gap:5px;padding:5px 12px;
+  border-radius:7px;background:var(--accent);border:none;
+  color:var(--brand);font-size:11px;font-weight:800;cursor:pointer;
+  transition:opacity .2s;font-family:'Plus Jakarta Sans',sans-serif;
+}
+.sp-btn-pdf:hover{opacity:.85}
+.sp-btn-setores{
+  display:inline-flex;align-items:center;gap:5px;padding:5px 12px;
+  border-radius:7px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+  color:white;font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .2s;font-family:'Plus Jakarta Sans',sans-serif;
+}
+.sp-btn-setores:hover{background:rgba(255,255,255,.25)}
+.sp-btn-setores.ativo{background:var(--accent);border-color:var(--accent);color:var(--brand)}
+
+/* Popup seletor de setores */
+.seletor-popup{
+  position:fixed;background:white;border:1px solid var(--border);
+  border-radius:16px;width:min(820px,96vw);max-height:80vh;
+  overflow:hidden;display:none;flex-direction:column;
+  box-shadow:0 32px 80px rgba(0,0,0,.35);z-index:10002;
+  left:50%;top:50%;transform:translate(-50%,-50%);
+}
+.seletor-popup.show{display:flex!important}
+.sel-pop-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 20px;background:var(--brand2);border-radius:16px 16px 0 0;flex-shrink:0;
+}
+.sel-pop-title{font-size:13px;font-weight:800;color:white}
+.sel-pop-sub{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px}
+.sel-pop-close{background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:20px;padding:0 2px;line-height:1}
+.sel-pop-close:hover{color:white}
+.sel-pop-body{padding:18px 20px;overflow-y:auto;flex:1}
+.sel-pop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:16px}
+.sel-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:9px;
+  border:1px solid var(--border);cursor:pointer;transition:all .18s;user-select:none}
+.sel-item:hover:not(.sel-item-fixed){border-color:var(--brand2);background:#f0f4fa}
+.sel-item.checked{border-color:var(--brand);background:#f0f4fa}
+.sel-item.checked .sel-check{background:var(--brand);border-color:var(--brand)}
+.sel-item.checked .sel-check::after{display:block}
+.sel-item-fixed{opacity:.55;cursor:default;border-color:var(--brand);background:#f0f4fa}
+.sel-check{width:16px;height:16px;border-radius:4px;border:2px solid var(--border);
+  flex-shrink:0;position:relative;transition:all .15s}
+.sel-check::after{content:'✓';display:none;position:absolute;top:-2px;left:1px;
+  font-size:11px;font-weight:800;color:white}
+.sel-item-name{font-size:12px;font-weight:600;color:var(--t1);line-height:1.3}
+.sel-pop-foot{padding:12px 20px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#f8fafc}
+.sel-pop-count{font-size:12px;color:var(--t2)}
+.sel-pop-count strong{color:var(--brand);font-weight:800}
+.sel-btn-confirm{padding:7px 18px;border-radius:8px;background:var(--brand);border:none;
+  color:white;font-size:12px;font-weight:800;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;
+  transition:opacity .2s}
+.sel-btn-confirm:hover{opacity:.85}
+.sp-close{background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:20px;padding:0 2px;line-height:1}
+.sp-close:hover{color:white}
+.sp-body{overflow-y:auto;padding:18px 20px;flex:1}
+.sp-section-lbl{
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--t3);margin-bottom:10px;display:flex;align-items:center;gap:6px;
+}
+.sp-section-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+.sp-kpi-row{display:grid;gap:10px;margin-bottom:16px}
+.sp-kpi-row.cols-5{grid-template-columns:repeat(5,1fr)}
+.sp-kpi-row.cols-4{grid-template-columns:repeat(4,1fr)}
+.sp-kpi{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px 14px;position:relative;overflow:hidden}
+.sp-kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:10px 0 0 10px}
+.sp-kpi.r::before{background:var(--red)}.sp-kpi.g::before{background:var(--green)}
+.sp-kpi.b::before{background:var(--blue)}.sp-kpi.y::before{background:var(--accent)}
+.sp-kpi-lbl{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.sp-kpi-val{font-size:16px;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1}
+.sp-kpi.r .sp-kpi-val{color:var(--red)}.sp-kpi.g .sp-kpi-val{color:var(--green)}
+.sp-kpi.b .sp-kpi-val{color:var(--blue)}.sp-kpi.y .sp-kpi-val{color:var(--accent)}
+.sp-kpi-sub{font-size:9px;color:var(--t3);margin-top:4px}
+</style>
+
+<!-- Popup de setor dentro de filial -->
+<div id="setor-popup" class="setor-popup">
+  <div class="sp-header">
+    <div>
+      <div class="sp-title" id="sp-title"></div>
+      <div class="sp-subtitle" id="sp-subtitle"></div>
+    </div>
+    <div class="sp-header-actions">
+      <button class="sp-btn-setores" id="sp-btn-setores" onclick="abrirSeletorSetores()">＋ Setores</button>
+      <button class="sp-btn-pdf" id="sp-btn-pdf" onclick="exportarPDFSetor()">📄 Exportar PDF</button>
+      <button class="sp-close" onclick="fecharPopupSetor()">✕</button>
+    </div>
+  </div>
+  <div class="sp-body" id="sp-body"></div>
+</div>
+<div id="setor-popup-overlay"
+     style="display:none;position:fixed;inset:0;z-index:9999"
+     onclick="fecharPopupSetor()"></div>
+
+<!-- Overlay do seletor (por cima do popup de setor mas com leve escurecimento) -->
+<div id="seletor-overlay" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.35)" onclick="fecharSeletorSetores()"></div>
+
+<!-- Popup seletor de setores -->
+<div id="seletor-popup" class="seletor-popup">
+  <div class="sel-pop-header">
+    <div>
+      <div class="sel-pop-title">Selecionar Setores para Exportar</div>
+      <div class="sel-pop-sub" id="sel-pop-sub"></div>
+    </div>
+    <button class="sel-pop-close" onclick="fecharSeletorSetores()">✕</button>
+  </div>
+  <div class="sel-pop-body">
+    <div class="sel-pop-grid" id="sel-pop-grid"></div>
+  </div>
+  <div class="sel-pop-foot">
+    <div class="sel-pop-count" id="sel-pop-count"><strong>1</strong> setor selecionado</div>
+    <button class="sel-btn-confirm" onclick="confirmarSetores()">Confirmar seleção</button>
+  </div>
+</div>
+
+</body>
+</html>
