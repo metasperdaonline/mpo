@@ -481,6 +481,31 @@ select:focus{border-color:var(--brand2)}
           <span style="color:var(--t3)">Nenhum cache salvo.</span>
         </div>
       </div>
+
+      <!-- Google Sheets -->
+      <div class="card p" style="max-width:580px;margin:16px auto 0">
+        <div class="sec-title">Google Sheets — Carga Automática</div>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.7">
+          Cole o link da planilha do Google Sheets. O dashboard vai buscar os dados automaticamente — sem precisar baixar ou fazer upload.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="sheets-url-input" placeholder="https://docs.google.com/spreadsheets/d/..." 
+            style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:12px"/>
+          <button onclick="carregarDoSheets()" style="padding:8px 16px;border-radius:8px;background:var(--brand);border:none;color:white;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Plus Jakarta Sans',sans-serif">
+            📥 Carregar
+          </button>
+        </div>
+        <div id="sheets-status" style="margin-top:10px;font-size:12px;color:var(--t3)"></div>
+        <div style="margin-top:12px;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:4px">💡 Como configurar</div>
+          <div style="font-size:11px;color:var(--t3);line-height:1.8">
+            1. No Google Sheets: <strong>Compartilhar → Qualquer pessoa com o link → Visualizador</strong><br>
+            2. Copie o link e cole acima<br>
+            3. Clique em Carregar — o link fica salvo e carrega automaticamente na próxima abertura
+          </div>
+        </div>
+      </div>
+      </div>
     </div>
 
     <!-- DASHBOARD -->
@@ -576,8 +601,16 @@ select:focus{border-color:var(--brand2)}
           </table></div>
         </div>
         <div class="card p">
-          <div class="sec-title">Top 5 Setores Críticos (R$)</div>
-          <div id="filial-top-setores" style="margin-top:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div class="sec-title" style="margin-bottom:0" id="top5-titulo">Top 5 Setores</div>
+            <select id="top5-criterio" onchange="renderTop5()" style="font-size:11px;padding:4px 8px;border-radius:7px;border:1px solid var(--border);color:var(--t2);font-family:'Plus Jakarta Sans',sans-serif">
+              <option value="realPerda">Valor Perda R$</option>
+              <option value="realPct">% Real Perda</option>
+              <option value="realFat">Faturamento R$</option>
+              <option value="saldo">Saldo R$</option>
+            </select>
+          </div>
+          <div id="filial-top-setores" style="margin-top:0">
             <div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Selecione uma filial</div>
           </div>
         </div>
@@ -700,8 +733,18 @@ let _setoresSel  = [];   // setores marcados para exportar
 
 document.addEventListener('DOMContentLoaded', () => {
   renderMesProgress();
-  restaurarCache();
-  atualizarInfoCache();
+  // URL padrão da planilha — já embutida no código
+  const SHEETS_URL_PADRAO = 'https://docs.google.com/spreadsheets/d/1aE5l2EIbsy5u4U74spjB6czmF2eIqFKZvxxqBDxkZCU/edit?usp=sharing';
+  if (!localStorage.getItem(SHEETS_KEY)) {
+    localStorage.setItem(SHEETS_KEY, SHEETS_URL_PADRAO);
+  }
+  restaurarUrlSheets();
+  autoCarregarSheets().then(loaded => {
+    if (!loaded) {
+      restaurarCache();
+      atualizarInfoCache();
+    }
+  });
   renderTabHistorico();
   registrarPWA();
 });
@@ -1178,6 +1221,76 @@ function registrarPWA() {
   const metaAplBar = document.createElement('meta');
   metaAplBar.name = 'apple-mobile-web-app-status-bar-style'; metaAplBar.content = 'black-translucent';
   document.head.appendChild(metaAplBar);
+}
+
+
+// ── Google Sheets Integration ─────────────────────────────────────────────────
+const SHEETS_KEY = 'tauste_sheets_url';
+
+function extrairSheetId(url) {
+  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return m ? m[1] : null;
+}
+
+function montarUrlExport(id) {
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`;
+}
+
+function setarStatusSheets(msg, cor) {
+  const el = document.getElementById('sheets-status');
+  if (el) { el.textContent = msg; el.style.color = cor || 'var(--t3)'; }
+}
+
+async function carregarDoSheets(urlOverride) {
+  const input = document.getElementById('sheets-url-input');
+  const url   = urlOverride || (input ? input.value.trim() : '');
+  if (!url) { setarStatusSheets('Cole o link da planilha primeiro.', 'var(--red)'); return; }
+
+  const id = extrairSheetId(url);
+  if (!id) { setarStatusSheets('❌ Link inválido — verifique o URL do Google Sheets.', 'var(--red)'); return; }
+
+  setarStatusSheets('⏳ Buscando dados do Google Sheets...', 'var(--t2)');
+  const exportUrl = montarUrlExport(id);
+
+  try {
+    const resp = await fetch(exportUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const buffer = await resp.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    // Salva URL para auto-carregar depois
+    localStorage.setItem(SHEETS_KEY, url);
+    if (input) input.value = url;
+    setarStatusSheets('✅ Dados carregados com sucesso!', 'var(--green)');
+    parseExcel(wb, 'Google Sheets');
+  } catch(e) {
+    console.error(e);
+    setarStatusSheets('❌ Erro ao buscar: ' + e.message + ' — verifique se a planilha está pública.', 'var(--red)');
+  }
+}
+
+function restaurarUrlSheets() {
+  const url = localStorage.getItem(SHEETS_KEY);
+  const input = document.getElementById('sheets-url-input');
+  if (url && input) input.value = url;
+  return url;
+}
+
+async function autoCarregarSheets() {
+  const url = localStorage.getItem(SHEETS_KEY);
+  if (!url) return false;
+  // Só auto-carrega se não houver cache local mais recente
+  const cache = localStorage.getItem('tauste_meta_cache');
+  if (cache) {
+    try {
+      const c = JSON.parse(cache);
+      const diffMin = (Date.now() - new Date(c.savedAt)) / 60000;
+      // Se o cache tem menos de 60 min, usa o cache — não busca de novo
+      if (diffMin < 60) return false;
+    } catch(e) {}
+  }
+  setarStatusSheets('⏳ Atualizando dados do Google Sheets...', 'var(--t2)');
+  await carregarDoSheets(url);
+  return true;
 }
 
 // ── Cache localStorage ────────────────────────────────────────────────────────
@@ -1663,24 +1776,64 @@ function renderTabFilial() {
     <td>—</td>
     <td>${statusBadge(realPct, metaPct)}</td></tr>`;
 
-  // Top 5 Setores Críticos
-  const top5 = [...rows].sort((a,b) => b.realPerda - a.realPerda).slice(0,5);
+  renderTop5();
+}
+
+// ── Top 5 dinâmico ────────────────────────────────────────────────────────────
+function renderTop5() {
+  if (!filialAtiva || !DATA.length) return;
+  const rows    = DATA.filter(d => d.filial === filialAtiva);
+  const crit    = document.getElementById('top5-criterio');
+  const criterio= crit ? crit.value : 'realPerda';
+
+  const titulos = {
+    realPerda: 'Top 5 — Valor de Perda R$',
+    realPct:   'Top 5 — % Real de Perda',
+    realFat:   'Top 5 — Faturamento R$',
+    saldo:     'Top 5 — Saldo da Meta R$',
+  };
+  const tit = document.getElementById('top5-titulo');
+  if (tit) tit.textContent = titulos[criterio] || 'Top 5 Setores';
+
+  const mapped = rows.map(s => ({
+    setor:     s.setor,
+    realPerda: s.realPerda,
+    realFat:   s.realFat,
+    saldo:     s.metaPerda - s.realPerda,
+    realPct:   s.realFat > 0 ? s.realPerda / s.realFat : 0,
+    metaPct:   s.metaFat > 0 ? s.metaPerda / s.metaFat : 0,
+  }));
+
+  // ordenação: saldo é invertido (menor = pior)
+  const top5 = [...mapped].sort((a,b) =>
+    criterio === 'saldo' ? a[criterio] - b[criterio] : b[criterio] - a[criterio]
+  ).slice(0, 5);
+
+  const labels = {
+    realPerda: s => ({ val: fmtS(s.realPerda), sub: fmtP(s.realPct)+' perda' }),
+    realPct:   s => ({ val: fmtP(s.realPct),   sub: 'Meta: '+fmtP(s.metaPct) }),
+    realFat:   s => ({ val: fmtS(s.realFat),   sub: 'Perda: '+fmtS(s.realPerda) }),
+    saldo:     s => ({ val: fmtS(s.saldo),      sub: s.saldo < 0 ? '⚠️ Excedido' : 'Disponível' }),
+  };
+
   document.getElementById('filial-top-setores').innerHTML = top5.map((s, i) => {
-    const rPct = s.realFat>0?s.realPerda/s.realFat:0;
-    const mPct = s.metaFat>0?s.metaPerda/s.metaFat:0;
-    return `
-    <div class="top-item">
-      <div class="top-rank r${i+1}">${i+1}</div>
+    const { val, sub } = (labels[criterio] || labels.realPerda)(s);
+    const cor = criterio === 'realPct'
+      ? (s.realPct > s.metaPct ? 'var(--red)' : 'var(--green)')
+      : criterio === 'saldo'
+      ? (s.saldo < 0 ? 'var(--red)' : 'var(--green)')
+      : 'var(--t2)';
+    return `<div class="top-item">
+      <div class="top-rank${i<3?' r'+(i+1):''}">${i+1}</div>
       <div style="flex:1">
         <div style="font-size:11px;font-weight:700;color:var(--t1)">${s.setor}</div>
-        <div style="font-size:10px;color:var(--t3)">Perda: ${fmtS(s.realPerda)}</div>
+        <div style="font-size:10px;color:var(--t3)">${sub}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:11px;font-weight:800;color:${rPct > mPct ? 'var(--red)' : 'var(--t2)'}">${fmtP(rPct)}</div>
-        <div style="font-size:9px;color:var(--t3)">real</div>
+        <div style="font-size:12px;font-weight:800;color:${cor};font-family:'JetBrains Mono',monospace">${val}</div>
       </div>
-    </div>
-  `}).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── Tab Setor ─────────────────────────────────────────────────────────────────
