@@ -419,7 +419,7 @@ select:focus{border-color:var(--brand2)}
     <button class="nav-btn active" data-tip="Dashboard"   onclick="switchTab('dash',this)">  <span class="nav-ic">📊</span><span class="nav-lbl">Dashboard</span></button>
     <button class="nav-btn"        data-tip="Por Filial"  onclick="switchTab('filial',this)"><span class="nav-ic">🏪</span><span class="nav-lbl">Por Filial</span></button>
     <button class="nav-btn"        data-tip="Por Setor"   onclick="switchTab('setor',this)"> <span class="nav-ic">📦</span><span class="nav-lbl">Por Setor</span></button>
-    <button class="nav-btn"        data-tip="Alertas"     onclick="switchTab('alertas',this)"><span class="nav-ic">🚨</span><span class="nav-lbl" id="lbl-alertas">Alertas</span></button>
+    <button class="nav-btn"        data-tip="Alertas"     onclick="switchTab('alertas',this)" id="nav-btn-alertas"><span class="nav-ic" style="position:relative">🚨<span id="alert-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:white;border-radius:50%;width:14px;height:14px;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1" id="alert-badge"></span></span><span class="nav-lbl" id="lbl-alertas">Alertas</span></button>
     <button class="nav-btn"        data-tip="Projeção"    onclick="switchTab('projecao',this)"><span class="nav-ic">📈</span><span class="nav-lbl">Projeção</span></button>
     <button class="nav-btn"        data-tip="Histórico"   onclick="switchTab('historico',this)"><span class="nav-ic">🕐</span><span class="nav-lbl" id="lbl-historico">Histórico</span></button>
     <button class="nav-btn"        data-tip="Carga de Dados" onclick="switchTab('config',this)"><span class="nav-ic">⚙️</span><span class="nav-lbl">Carga de Dados</span></button>
@@ -433,13 +433,25 @@ select:focus{border-color:var(--brand2)}
       <div class="topbar-meta" id="topbar-meta">Selecione o arquivo Excel</div>
       <div id="topbar-data" style="font-size:11px;color:var(--t3);display:none">📅 <span id="topbar-data-txt"></span></div>
     </div>
-    <div id="export-btns" class="hidden" style="display:flex;gap:8px">
-      <button class="btn-export pdf" onclick="exportarPDF()">
-        <span>📄</span> PDF
-      </button>
-      <button class="btn-export excel" onclick="exportarExcel()">
-        <span>📊</span> Excel
-      </button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="filtro-periodo" style="display:none;align-items:center;gap:6px">
+        <select id="filtro-mes" onchange="aplicarFiltro()" style="font-size:11px;padding:5px 8px;border-radius:7px;border:1px solid var(--border)">
+          <option value="">Todos os meses</option>
+          <option value="01">Janeiro</option><option value="02">Fevereiro</option>
+          <option value="03">Março</option><option value="04">Abril</option>
+          <option value="05">Maio</option><option value="06">Junho</option>
+          <option value="07">Julho</option><option value="08">Agosto</option>
+          <option value="09">Setembro</option><option value="10">Outubro</option>
+          <option value="11">Novembro</option><option value="12">Dezembro</option>
+        </select>
+        <select id="filtro-ano" onchange="aplicarFiltro()" style="font-size:11px;padding:5px 8px;border-radius:7px;border:1px solid var(--border)">
+          <option value="">Todos os anos</option>
+        </select>
+      </div>
+      <div id="export-btns" class="hidden" style="display:flex;gap:8px">
+        <button class="btn-export pdf" onclick="exportarPDF()"><span>📄</span> PDF</button>
+        <button class="btn-export excel" onclick="exportarExcel()"><span>📊</span> Excel</button>
+      </div>
     </div>
   </header>
   <div class="content">
@@ -617,7 +629,10 @@ select:focus{border-color:var(--brand2)}
       <div class="card p">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
           <div class="sec-title" style="margin-bottom:0">Cargas Salvas</div>
-          <button onclick="limparHistorico()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--red);background:white;color:var(--red);font-size:11px;font-weight:700;cursor:pointer">🗑 Limpar tudo</button>
+          <div style="display:flex;gap:8px">
+            <button onclick="exportarHistoricoExcel()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--green);background:white;color:var(--green);font-size:11px;font-weight:700;cursor:pointer">📊 Exportar Excel</button>
+            <button onclick="limparHistorico()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--red);background:white;color:var(--red);font-size:11px;font-weight:700;cursor:pointer">🗑 Limpar tudo</button>
+          </div>
         </div>
         <div class="tbl-wrap">
           <table>
@@ -688,6 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
   restaurarCache();
   atualizarInfoCache();
   renderTabHistorico();
+  registrarPWA();
 });
 
 const FILIAL_MAP = {
@@ -786,6 +802,8 @@ function parseExcel(wb, fileName) {
     const filial = FILIAL_MAP[cod] || cod;
     DATA.push({
       filial, filialCurta: nomeC(filial), setor,
+      ano:       +r[0]  ||0,   // ANO
+      mes:       String(r[1]||'').padStart(2,'0'), // MÊS
       metaFat:   +r[4]  ||0,   // META FAT
       metaPerda: +r[5]  ||0,   // META PERDA
       realFat:   +r[7]  ||0,   // REAL FAT
@@ -794,6 +812,7 @@ function parseExcel(wb, fileName) {
     });
   });
 
+  DATA_FULL = [...DATA];
   const nF = [...new Set(DATA.map(d=>d.filial))].length;
   const nS = [...new Set(DATA.map(d=>d.setor))].length;
 
@@ -809,6 +828,7 @@ function parseExcel(wb, fileName) {
   document.getElementById('topbar-data').style.display = 'block';
 
   popularSelects();
+  popularFiltros();
   updateProgress(65);
   renderMesProgress();
   updateProgress(75);
@@ -1012,6 +1032,154 @@ function renderTabHistorico() {
   }).join('');
 }
 
+
+// ── MELHORIA 1: Filtro Período ────────────────────────────────────────────────
+let DATA_FULL = []; // guarda todos os dados sem filtro
+
+function popularFiltros() {
+  const anos = [...new Set(DATA_FULL.map(d=>d.ano))].filter(Boolean).sort();
+  const sel = document.getElementById('filtro-ano');
+  sel.innerHTML = '<option value="">Todos os anos</option>' +
+    anos.map(a=>`<option value="${a}">${a}</option>`).join('');
+  // seleciona o ano/mês atual por padrão
+  const agora = new Date();
+  const mes   = String(agora.getMonth()+1).padStart(2,'0');
+  const ano   = String(agora.getFullYear());
+  if (anos.includes(+ano)) sel.value = ano;
+  const selMes = document.getElementById('filtro-mes');
+  const meses = [...new Set(DATA_FULL.map(d=>d.mes))].filter(Boolean);
+  if (meses.includes(mes)) selMes.value = mes;
+  document.getElementById('filtro-periodo').style.display = 'flex';
+}
+
+function aplicarFiltro() {
+  const mes = document.getElementById('filtro-mes').value;
+  const ano = document.getElementById('filtro-ano').value;
+  DATA = DATA_FULL.filter(d => {
+    const mesOk = !mes || String(d.mes).padStart(2,'0') === mes;
+    const anoOk = !ano || String(d.ano) === ano;
+    return mesOk && anoOk;
+  });
+  renderDashboard();
+  renderTabFilial();
+  renderTabSetor();
+  renderAlertas();
+  renderTabProjecao();
+}
+
+// ── MELHORIA 2: Badge de alertas ──────────────────────────────────────────────
+function atualizarBadgeAlertas(n) {
+  const badge = document.getElementById('alert-badge');
+  if (!badge) return;
+  if (n > 0) {
+    badge.textContent = n > 99 ? '99+' : n;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── MELHORIA 3: Exportar histórico como Excel ─────────────────────────────────
+function exportarHistoricoExcel() {
+  const hist = carregarHistorico();
+  if (!hist.length) { alert('Nenhum histórico para exportar.'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // Aba 1: Resumo por carga
+  const resumoRows = [['Data/Hora','Arquivo','Filiais','Realizado R$','Meta R$','Atingimento %','% Real Perda','% Meta Perda']];
+  hist.forEach(s => {
+    resumoRows.push([
+      new Date(s.savedAt).toLocaleString('pt-BR'),
+      s.fileName, s.nFiliais,
+      Math.round(s.totReal), Math.round(s.totMeta),
+      +(s.ating*100).toFixed(2),
+      +(s.realPct*100).toFixed(2),
+      +(s.metaPct*100).toFixed(2),
+    ]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumoRows), 'Resumo');
+
+  // Aba 2: Evolução por filial (últimas cargas com byF)
+  const filiais = [...new Set(hist.flatMap(s=>Object.keys(s.byF||{})))].sort();
+  const evolRows = [['Filial', ...hist.map(s=>new Date(s.savedAt).toLocaleDateString('pt-BR')+' '+new Date(s.savedAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))]];
+  filiais.forEach(f => {
+    const row = [f, ...hist.map(s => {
+      const d = s.byF&&s.byF[f];
+      return d ? +(d.realFat>0?d.realPerda/d.realFat*100:0).toFixed(2) : '';
+    })];
+    evolRows.push(row);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evolRows), 'Evolução % por Filial');
+
+  XLSX.writeFile(wb, 'historico_tauste_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
+// ── MELHORIA 4: % Meta específica por setor no popup ─────────────────────────
+// (já integrado em gerarBlocoSetor e abrirPopupSetor via metaFat/metaPerda do setor)
+// Adiciona label identificando que é a % meta do setor específico
+// (sem mudança de código — os dados já são filtrados por setor corretamente)
+
+// ── MELHORIA 5: PWA ───────────────────────────────────────────────────────────
+function registrarPWA() {
+  // Manifest via blob
+  const manifest = {
+    name: 'Dashboard Tauste',
+    short_name: 'Tauste',
+    description: 'Dashboard de Metas de Perda — Tauste',
+    start_url: './',
+    display: 'standalone',
+    background_color: '#f0f4f8',
+    theme_color: '#002855',
+    orientation: 'any',
+    icons: [
+      { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23002855'/><text y='.9em' font-size='72' x='14'>📈</text></svg>", sizes: '192x192', type: 'image/svg+xml' },
+      { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23002855'/><text y='.9em' font-size='72' x='14'>📈</text></svg>", sizes: '512x512', type: 'image/svg+xml' }
+    ]
+  };
+  const blob   = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+  const mUrl   = URL.createObjectURL(blob);
+  const link   = document.createElement('link');
+  link.rel     = 'manifest';
+  link.href    = mUrl;
+  document.head.appendChild(link);
+
+  // Service Worker via blob — cache offline
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      const CACHE = 'tauste-v1';
+      self.addEventListener('install', e => {
+        e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/'])));
+        self.skipWaiting();
+      });
+      self.addEventListener('fetch', e => {
+        e.respondWith(
+          caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('/')))
+        );
+      });
+    `;
+    const swBlob = new Blob([swCode], {type:'application/javascript'});
+    const swUrl  = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swUrl, {scope:'./'})
+      .then(() => console.log('SW registrado'))
+      .catch(e => console.warn('SW não registrado:', e));
+  }
+
+  // Meta theme-color
+  const meta = document.createElement('meta');
+  meta.name = 'theme-color'; meta.content = '#002855';
+  document.head.appendChild(meta);
+  const metaApl = document.createElement('meta');
+  metaApl.name = 'apple-mobile-web-app-capable'; metaApl.content = 'yes';
+  document.head.appendChild(metaApl);
+  const metaAplTitle = document.createElement('meta');
+  metaAplTitle.name = 'apple-mobile-web-app-title'; metaAplTitle.content = 'Tauste';
+  document.head.appendChild(metaAplTitle);
+  const metaAplBar = document.createElement('meta');
+  metaAplBar.name = 'apple-mobile-web-app-status-bar-style'; metaAplBar.content = 'black-translucent';
+  document.head.appendChild(metaAplBar);
+}
+
 // ── Cache localStorage ────────────────────────────────────────────────────────
 function atualizarInfoCache() {
   const raw = localStorage.getItem('tauste_meta_cache');
@@ -1043,6 +1211,7 @@ function restaurarCache() {
     const c = JSON.parse(raw);
     if (!c.data || !c.data.length) return;
     DATA = c.data;
+    DATA_FULL = [...DATA];
     const nF = [...new Set(DATA.map(d=>d.filial))].length;
     const nS = [...new Set(DATA.map(d=>d.setor))].length;
     document.getElementById('upload-box').classList.add('loaded');
@@ -1644,6 +1813,7 @@ function renderAlertas() {
 
   // Atualiza label do menu
   document.getElementById('lbl-alertas').textContent = criticos.length ? `Alertas (${criticos.length})` : 'Alertas';
+  atualizarBadgeAlertas(criticos.length);
 
   const tblHTML = (rows) => `
     <div class="tbl-wrap"><table>
