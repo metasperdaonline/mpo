@@ -482,29 +482,7 @@ select:focus{border-color:var(--brand2)}
         </div>
       </div>
 
-      <!-- Google Sheets -->
-      <div class="card p" style="max-width:580px;margin:16px auto 0">
-        <div class="sec-title">Google Sheets — Carga Automática</div>
-        <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.7">
-          Cole o link da planilha do Google Sheets. O dashboard vai buscar os dados automaticamente — sem precisar baixar ou fazer upload.
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input type="text" id="sheets-url-input" placeholder="https://docs.google.com/spreadsheets/d/..." 
-            style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:12px"/>
-          <button onclick="carregarDoSheets()" style="padding:8px 16px;border-radius:8px;background:var(--brand);border:none;color:white;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Plus Jakarta Sans',sans-serif">
-            📥 Carregar
-          </button>
-        </div>
-        <div id="sheets-status" style="margin-top:10px;font-size:12px;color:var(--t3)"></div>
-        <div style="margin-top:12px;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
-          <div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:4px">💡 Como configurar</div>
-          <div style="font-size:11px;color:var(--t3);line-height:1.8">
-            1. No Google Sheets: <strong>Compartilhar → Qualquer pessoa com o link → Visualizador</strong><br>
-            2. Copie o link e cole acima<br>
-            3. Clique em Carregar — o link fica salvo e carrega automaticamente na próxima abertura
-          </div>
-        </div>
-      </div>
+
       </div>
     </div>
 
@@ -733,18 +711,8 @@ let _setoresSel  = [];   // setores marcados para exportar
 
 document.addEventListener('DOMContentLoaded', () => {
   renderMesProgress();
-  // URL padrão da planilha — já embutida no código
-  const SHEETS_URL_PADRAO = 'https://docs.google.com/spreadsheets/d/1aE5l2EIbsy5u4U74spjB6czmF2eIqFKZvxxqBDxkZCU/edit?usp=sharing';
-  if (!localStorage.getItem(SHEETS_KEY)) {
-    localStorage.setItem(SHEETS_KEY, SHEETS_URL_PADRAO);
-  }
-  restaurarUrlSheets();
-  autoCarregarSheets().then(loaded => {
-    if (!loaded) {
-      restaurarCache();
-      atualizarInfoCache();
-    }
-  });
+  restaurarCache();
+  atualizarInfoCache();
   renderTabHistorico();
   registrarPWA();
 });
@@ -1223,75 +1191,6 @@ function registrarPWA() {
   document.head.appendChild(metaAplBar);
 }
 
-
-// ── Google Sheets Integration ─────────────────────────────────────────────────
-const SHEETS_KEY = 'tauste_sheets_url';
-
-function extrairSheetId(url) {
-  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return m ? m[1] : null;
-}
-
-function montarUrlExport(id) {
-  return `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`;
-}
-
-function setarStatusSheets(msg, cor) {
-  const el = document.getElementById('sheets-status');
-  if (el) { el.textContent = msg; el.style.color = cor || 'var(--t3)'; }
-}
-
-async function carregarDoSheets(urlOverride) {
-  const input = document.getElementById('sheets-url-input');
-  const url   = urlOverride || (input ? input.value.trim() : '');
-  if (!url) { setarStatusSheets('Cole o link da planilha primeiro.', 'var(--red)'); return; }
-
-  const id = extrairSheetId(url);
-  if (!id) { setarStatusSheets('❌ Link inválido — verifique o URL do Google Sheets.', 'var(--red)'); return; }
-
-  setarStatusSheets('⏳ Buscando dados do Google Sheets...', 'var(--t2)');
-  const exportUrl = montarUrlExport(id);
-
-  try {
-    const resp = await fetch(exportUrl);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const buffer = await resp.arrayBuffer();
-    const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-    // Salva URL para auto-carregar depois
-    localStorage.setItem(SHEETS_KEY, url);
-    if (input) input.value = url;
-    setarStatusSheets('✅ Dados carregados com sucesso!', 'var(--green)');
-    parseExcel(wb, 'Google Sheets');
-  } catch(e) {
-    console.error(e);
-    setarStatusSheets('❌ Erro ao buscar: ' + e.message + ' — verifique se a planilha está pública.', 'var(--red)');
-  }
-}
-
-function restaurarUrlSheets() {
-  const url = localStorage.getItem(SHEETS_KEY);
-  const input = document.getElementById('sheets-url-input');
-  if (url && input) input.value = url;
-  return url;
-}
-
-async function autoCarregarSheets() {
-  const url = localStorage.getItem(SHEETS_KEY);
-  if (!url) return false;
-  // Só auto-carrega se não houver cache local mais recente
-  const cache = localStorage.getItem('tauste_meta_cache');
-  if (cache) {
-    try {
-      const c = JSON.parse(cache);
-      const diffMin = (Date.now() - new Date(c.savedAt)) / 60000;
-      // Se o cache tem menos de 60 min, usa o cache — não busca de novo
-      if (diffMin < 60) return false;
-    } catch(e) {}
-  }
-  setarStatusSheets('⏳ Atualizando dados do Google Sheets...', 'var(--t2)');
-  await carregarDoSheets(url);
-  return true;
-}
 
 // ── Cache localStorage ────────────────────────────────────────────────────────
 function atualizarInfoCache() {
